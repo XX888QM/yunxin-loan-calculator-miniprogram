@@ -9,8 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 常用命令
 
 ```bash
-npm test                    # 全部测试 = node tests/loan.test.js && node tests/page.test.js
+npm test                    # 全部测试 = loan + pdf + page
 node tests/loan.test.js     # 只跑计算引擎测试
+node tests/pdf.test.js      # 只跑 PDF 导出测试
 node tests/page.test.js     # 只跑页面逻辑测试
 node --check utils/loan.js  # 语法检查
 ```
@@ -33,7 +34,7 @@ node --check utils/loan.js  # 语法检查
 ### utils/pdf.js — PDF 导出（零依赖）
 
 - 只生成还款明细 PDF，供页面写入本地临时文件后 `wx.openDocument` 打开。
-- 不引入第三方库、不上传数据；PDF 引用系统 CJK 字体 `STSong-Light`，中文以 UCS-2BE 十六进制写入，避免嵌入字体导致包体变大。
+- 不引入第三方库、不上传数据；PDF 中文用系统 CJK 字体 `STSong-Light` + UCS-2BE，金额/日期/期数用 `Helvetica`，避免数字被中文字体拉开，也避免嵌入字体导致包体变大。
 
 ### pages/index/index.js — 单页多工具（ES6：const/箭头函数）
 
