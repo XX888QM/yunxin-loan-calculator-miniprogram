@@ -133,9 +133,11 @@ assert.strictEqual(loan.calcRentPricing(100000, 20000, 12, 200000, 10).monthlyRe
 ;(function () {
   const net = 340000, m = 36, r = 0.0125
   const pay = net * r * Math.pow(1 + r, m) / (Math.pow(1 + r, m) - 1)
-  const res = loan.calcActualRate(350000, pay, m, 0, 10000)
+  const res = loan.calcActualRate(350000, pay, m, 1, 10000)
   closeTo(res.feeAdjustedMonthlyRate, r, 0.0000001)
   assert.ok(res.feeAdjustedMonthlyRate > res.monthlyRate)
+  closeTo(res.claimedMultiple, r / 0.01, 0.0000001)
+  closeTo(res.claimedMonthlyGap, r - 0.01, 0.0000001)
   closeTo(res.totalInterest, pay * m - 350000, 0.01)
 })()
 

@@ -187,6 +187,7 @@ function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePer
   var feeAdjustedMonthlyRate = upfrontFee > 0
     ? inferMonthlyRateFromPayment(principal - upfrontFee, monthlyPayment, months)
     : monthlyRate
+  var comparisonMonthlyRate = upfrontFee > 0 ? feeAdjustedMonthlyRate : monthlyRate
   var claimedMonthlyRate = nonNegative(claimedMonthlyRatePercent) / 100
   var totalPayment = monthlyPayment * months
   var totalInterest = Math.max(0, totalPayment - principal)
@@ -204,8 +205,8 @@ function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePer
     totalPayment: totalPayment,
     totalInterest: totalInterest,
     claimedMonthlyRate: claimedMonthlyRate,
-    claimedMultiple: claimedMonthlyRate > 0 ? monthlyRate / claimedMonthlyRate : 0,
-    claimedMonthlyGap: monthlyRate - claimedMonthlyRate
+    claimedMultiple: claimedMonthlyRate > 0 ? comparisonMonthlyRate / claimedMonthlyRate : 0,
+    claimedMonthlyGap: comparisonMonthlyRate - claimedMonthlyRate
   }
 }
 
