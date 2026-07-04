@@ -1,0 +1,13 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "真实贷款计算器",
+    "navigationBarBackgroundColor": "#f6f2ea",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f6f2ea"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

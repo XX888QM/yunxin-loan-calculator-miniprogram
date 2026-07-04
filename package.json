@@ -1,0 +1,6 @@
+{
+  "scripts": {
+    "test": "node tests/loan.test.js && node tests/page.test.js"
+  },
+  "devDependencies": {}
+}

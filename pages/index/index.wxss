@@ -1,0 +1,284 @@
+.page {
+  min-height: 100vh;
+  padding: 28rpx 28rpx 56rpx;
+  background: #f6f2ea;
+}
+
+.masthead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 18rpx 0 26rpx;
+  gap: 22rpx;
+}
+
+.masthead > view {
+  flex: 1;
+  min-width: 0;
+}
+
+.eyebrow {
+  display: block;
+  color: #b26b22;
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.title {
+  display: block;
+  margin-top: 8rpx;
+  color: #162326;
+  font-size: 44rpx;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.subtitle {
+  display: block;
+  margin-top: 10rpx;
+  color: #657174;
+  font-size: 24rpx;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.copy-btn {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 24rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  border: 2rpx solid #1e5f55;
+  border-radius: 8rpx;
+  background: #fdfaf4;
+  color: #1e5f55;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.copy-btn::after {
+  border: 0;
+}
+
+.loan-panel {
+  margin-bottom: 22rpx;
+  padding: 20rpx;
+  border: 2rpx solid #e2d8c9;
+  border-radius: 8rpx;
+  background: #fffaf1;
+}
+
+.tool-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+  margin-bottom: 22rpx;
+}
+
+.tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 66rpx;
+  padding: 0 18rpx;
+  border: 2rpx solid #ded4c4;
+  border-radius: 8rpx;
+  background: #fffaf1;
+  color: #526164;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.tool.active {
+  border-color: #1e5f55;
+  background: #1e5f55;
+  color: #fffaf1;
+}
+
+.panel,
+.schedule {
+  margin-top: 22rpx;
+  padding: 24rpx;
+  border: 2rpx solid #e2d8c9;
+  border-radius: 8rpx;
+  background: #fffaf1;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: 178rpx 1fr 48rpx;
+  align-items: center;
+  min-height: 78rpx;
+  border-bottom: 2rpx solid #eee5d7;
+}
+
+.field:last-of-type {
+  border-bottom: 0;
+}
+
+.label {
+  color: #596669;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.input {
+  min-height: 74rpx;
+  color: #162326;
+  font-size: 32rpx;
+  font-weight: 800;
+  text-align: right;
+}
+
+.input-placeholder {
+  color: #b5a892;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.unit {
+  color: #8a6a42;
+  font-size: 24rpx;
+  font-weight: 700;
+  text-align: right;
+}
+
+.quick-row {
+  display: flex;
+  gap: 14rpx;
+  margin: 16rpx 0 6rpx;
+  flex-wrap: wrap;
+}
+
+.quick-row text {
+  padding: 12rpx 18rpx;
+  border-radius: 8rpx;
+  background: #efe6d8;
+  color: #6d573b;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10rpx;
+  margin-top: 22rpx;
+  padding: 8rpx;
+  border-radius: 8rpx;
+  background: #efe6d8;
+}
+
+.segmented.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.segmented text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 58rpx;
+  border-radius: 6rpx;
+  color: #675b4d;
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.segmented text.active {
+  background: #fffaf1;
+  color: #174f48;
+  box-shadow: 0 4rpx 12rpx rgba(36, 44, 45, 0.08);
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14rpx;
+  margin-top: 22rpx;
+}
+
+.metric {
+  min-height: 124rpx;
+  padding: 18rpx;
+  border-radius: 8rpx;
+  background: #f3ecdf;
+}
+
+.metric text {
+  display: block;
+}
+
+.metric text:first-child {
+  color: #687477;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.metric text:last-child {
+  margin-top: 12rpx;
+  color: #172629;
+  font-size: 31rpx;
+  font-weight: 850;
+  word-break: break-all;
+}
+
+.metric.main {
+  background: #1e5f55;
+}
+
+.metric.main text {
+  color: #fffaf1;
+}
+
+.schedule-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+  color: #182225;
+  font-size: 28rpx;
+  font-weight: 850;
+}
+
+.schedule-head text:last-child {
+  color: #9b6b2e;
+  font-size: 24rpx;
+}
+
+.table-scroll {
+  width: 100%;
+}
+
+.table-inner {
+  min-width: 940rpx;
+}
+
+.table-head,
+.table-row {
+  display: grid;
+  grid-template-columns: 52rpx 1fr 1fr 1fr 1fr;
+  gap: 8rpx;
+  align-items: center;
+  min-height: 58rpx;
+  border-bottom: 2rpx solid #eee5d7;
+}
+
+.table-head text {
+  color: #8a6a42;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
+.table-row text {
+  color: #2a383a;
+  font-size: 22rpx;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-row:last-child {
+  border-bottom: 0;
+}
