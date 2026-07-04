@@ -55,6 +55,10 @@ function rateText(value, mode) {
   return `${rateLabel(mode)}：${value || 0}${rateUnit(mode)}`
 }
 
+function amount(value, unit) {
+  return loan.toNumber(value) * (unit === 'wan' ? 10000 : 1)
+}
+
 const LOAN_TYPES = [
   { value: 'car', label: '车贷' },
   { value: 'home', label: '房贷' }
@@ -109,7 +113,8 @@ Page({
       months: '',
       annualRate: '',
       rateMode: 'annual',
-      method: 'equalInstallment'
+      method: 'equalInstallment',
+      unit: 'yuan'
     },
     comboForm: {
       commercialPrincipal: '',
@@ -118,7 +123,8 @@ Page({
       fundRate: '',
       years: '',
       rateMode: 'annual',
-      method: 'equalInstallment'
+      method: 'equalInstallment',
+      unit: 'wan'
     },
     budgetForm: {
       monthlyBudget: '',
@@ -132,13 +138,15 @@ Page({
       months: '',
       monthlyPayment: '',
       claimedMonthlyRate: '',
-      claimedRateMode: 'monthly'
+      claimedRateMode: 'monthly',
+      unit: 'yuan'
     },
     flatForm: {
       principal: '',
       months: '',
       monthlyFlatRate: '',
-      rateMode: 'monthly'
+      rateMode: 'monthly',
+      unit: 'yuan'
     },
     prepayForm: {
       principal: '',
@@ -147,7 +155,8 @@ Page({
       rateMode: 'annual',
       paidMonths: '',
       prepayAmount: '',
-      reduceMode: 'term'
+      reduceMode: 'term',
+      unit: 'wan'
     },
     paymentResult: {},
     comboResult: {},
@@ -212,7 +221,8 @@ Page({
       loanType,
       termOptionList: TERM_OPTIONS[loanType] || TERM_OPTIONS.car,
       toolList,
-      activeTool
+      activeTool,
+      'paymentForm.unit': loanType === 'home' ? 'wan' : 'yuan'
     }, () => this.recalculate())
   },
 
@@ -265,7 +275,7 @@ Page({
   buildPaymentResult() {
     const form = this.data.paymentForm
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
-    const result = loan.calculateByMethod(form.principal, annualRate, form.months, form.method)
+    const result = loan.calculateByMethod(amount(form.principal, form.unit), annualRate, form.months, form.method)
     const primaryLabel = form.method === 'equalPrincipal' ? '首月月供' : '每月月供'
     const primaryPayment = form.method === 'equalPrincipal' ? result.firstPayment : result.monthlyPayment
     const copyText = [
@@ -296,9 +306,9 @@ Page({
     const commercialRate = asAnnualRate(form.commercialRate, form.rateMode)
     const fundRate = asAnnualRate(form.fundRate, form.rateMode)
     const result = loan.calcCompositeLoan(
-      form.commercialPrincipal,
+      amount(form.commercialPrincipal, form.unit),
       commercialRate,
-      form.fundPrincipal,
+      amount(form.fundPrincipal, form.unit),
       fundRate,
       months,
       form.method
@@ -307,8 +317,8 @@ Page({
     const copyText = [
       ...this.loanContextLines(),
       `组合贷本金：${money(result.principal)} 元`,
-      `商贷：${money(loan.toNumber(form.commercialPrincipal))} 元，${rateText(form.commercialRate, form.rateMode)}`,
-      `公积金：${money(loan.toNumber(form.fundPrincipal))} 元，${rateText(form.fundRate, form.rateMode)}`,
+      `商贷：${money(amount(form.commercialPrincipal, form.unit))} 元，${rateText(form.commercialRate, form.rateMode)}`,
+      `公积金：${money(amount(form.fundPrincipal, form.unit))} 元，${rateText(form.fundRate, form.rateMode)}`,
       `首月/每月：${money(primaryPayment)} 元`,
       `总利息：${money(result.totalInterest)} 元`
     ].join('\n')
@@ -352,7 +362,7 @@ Page({
   buildActualResult() {
     const form = this.data.actualForm
     const claimedMonthlyRate = asMonthlyRatePercent(form.claimedMonthlyRate, form.claimedRateMode)
-    const result = loan.calcActualRate(form.principal, form.monthlyPayment, form.months, claimedMonthlyRate)
+    const result = loan.calcActualRate(amount(form.principal, form.unit), form.monthlyPayment, form.months, claimedMonthlyRate)
     const copyText = [
       ...this.loanContextLines(),
       `本金：${money(result.principal)} 元`,
@@ -379,7 +389,7 @@ Page({
   buildFlatResult() {
     const form = this.data.flatForm
     const monthlyFlatRate = asMonthlyFlatRate(form.monthlyFlatRate, form.rateMode)
-    const result = loan.calcFlatMonthly(form.principal, monthlyFlatRate, form.months)
+    const result = loan.calcFlatMonthly(amount(form.principal, form.unit), monthlyFlatRate, form.months)
     const copyText = [
       ...this.loanContextLines(),
       `平息${rateText(form.monthlyFlatRate, form.rateMode)}`,
@@ -405,11 +415,11 @@ Page({
     const form = this.data.prepayForm
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
     const result = loan.calcPrepayment(
-      form.principal,
+      amount(form.principal, form.unit),
       annualRate,
       form.months,
       form.paidMonths,
-      form.prepayAmount,
+      amount(form.prepayAmount, form.unit),
       form.reduceMode
     )
     const copyText = [

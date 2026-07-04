@@ -22,7 +22,11 @@
     <view class="field">
       <text class="label">贷款本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款金额" type="digit" value="{{paymentForm.principal}}" data-form="paymentForm" data-field="principal" bindinput="onInput" />
-      <text class="unit">元</text>
+      <text class="unit">{{paymentForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{paymentForm.unit == 'yuan' ? 'active' : ''}}" data-form="paymentForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+      <text class="{{paymentForm.unit == 'wan' ? 'active' : ''}}" data-form="paymentForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
     <view class="field">
       <text class="label">还款期数</text>
@@ -58,7 +62,11 @@
     <view class="field">
       <text class="label">商贷本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入商贷金额" type="digit" value="{{comboForm.commercialPrincipal}}" data-form="comboForm" data-field="commercialPrincipal" bindinput="onInput" />
-      <text class="unit">元</text>
+      <text class="unit">{{comboForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{comboForm.unit == 'yuan' ? 'active' : ''}}" data-form="comboForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+      <text class="{{comboForm.unit == 'wan' ? 'active' : ''}}" data-form="comboForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
     <view class="field">
       <text class="label">商贷{{comboForm.rateMode == 'monthly' ? '月息' : '年化'}}</text>
@@ -68,7 +76,7 @@
     <view class="field">
       <text class="label">公积金本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入公积金金额" type="digit" value="{{comboForm.fundPrincipal}}" data-form="comboForm" data-field="fundPrincipal" bindinput="onInput" />
-      <text class="unit">元</text>
+      <text class="unit">{{comboForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field">
       <text class="label">公积金{{comboForm.rateMode == 'monthly' ? '月息' : '年化'}}</text>
@@ -135,7 +143,11 @@
     <view class="field">
       <text class="label">贷款本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款金额" type="digit" value="{{actualForm.principal}}" data-form="actualForm" data-field="principal" bindinput="onInput" />
-      <text class="unit">元</text>
+      <text class="unit">{{actualForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{actualForm.unit == 'yuan' ? 'active' : ''}}" data-form="actualForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+      <text class="{{actualForm.unit == 'wan' ? 'active' : ''}}" data-form="actualForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
     <view class="field">
       <text class="label">实际月供</text>
@@ -170,7 +182,11 @@
     <view class="field">
       <text class="label">贷款本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款金额" type="digit" value="{{flatForm.principal}}" data-form="flatForm" data-field="principal" bindinput="onInput" />
-      <text class="unit">元</text>
+      <text class="unit">{{flatForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{flatForm.unit == 'yuan' ? 'active' : ''}}" data-form="flatForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+      <text class="{{flatForm.unit == 'wan' ? 'active' : ''}}" data-form="flatForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
     <view class="field">
       <text class="label">平息{{flatForm.rateMode == 'annual' ? '年化%' : '月息%'}}</text>
@@ -198,7 +214,11 @@
     <view class="field">
       <text class="label">贷款本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款金额" type="digit" value="{{prepayForm.principal}}" data-form="prepayForm" data-field="principal" bindinput="onInput" />
-      <text class="unit">元</text>
+      <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{prepayForm.unit == 'yuan' ? 'active' : ''}}" data-form="prepayForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+      <text class="{{prepayForm.unit == 'wan' ? 'active' : ''}}" data-form="prepayForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
     <view class="field">
       <text class="label">{{prepayForm.rateMode == 'monthly' ? '月息%' : '年化%'}}</text>
@@ -218,7 +238,7 @@
     <view class="field">
       <text class="label">提前还款</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="准备提前还多少" type="digit" value="{{prepayForm.prepayAmount}}" data-form="prepayForm" data-field="prepayAmount" bindinput="onInput" />
-      <text class="unit">元</text>
+      <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="segmented two">
       <text class="{{prepayForm.rateMode == 'annual' ? 'active' : ''}}" data-form="prepayForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>

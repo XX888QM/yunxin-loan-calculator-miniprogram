@@ -67,6 +67,28 @@ page.data.actualForm.claimedMonthlyRate = '7.08'
 page.data.actualForm.claimedRateMode = 'annual'
 assert.ok(page.buildActualResult().copyText.includes('对外年化：7.08%'))
 
+page.data.paymentForm = {
+  principal: '35',
+  months: '36',
+  annualRate: '13.14',
+  rateMode: 'annual',
+  method: 'equalInstallment',
+  unit: 'wan',
+  inputMode: 'loan',
+  carPrice: '',
+  downRatio: '',
+  downPayment: ''
+}
+const wanPayment = page.buildPaymentResult().primaryPayment
+page.data.paymentForm.unit = 'yuan'
+page.data.paymentForm.principal = '350000'
+assert.strictEqual(page.buildPaymentResult().primaryPayment, wanPayment)
+
+page.setLoanType({ currentTarget: { dataset: { value: 'home' } } })
+assert.strictEqual(page.data.paymentForm.unit, 'wan')
+page.setLoanType({ currentTarget: { dataset: { value: 'car' } } })
+assert.strictEqual(page.data.paymentForm.unit, 'yuan')
+
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))
 
