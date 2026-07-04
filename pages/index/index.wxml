@@ -432,7 +432,7 @@
         </picker>
         <text class="schedule-count">共 {{activeSchedulePreview.length}} 期</text>
         <button class="schedule-action share" open-type="share">分享</button>
-        <button class="schedule-action export" bindtap="exportSchedulePdf">导出</button>
+        <button class="schedule-action export" bindtap="exportSchedulePdf">导出PDF</button>
       </view>
     </view>
     <scroll-view class="table-scroll" scroll-x>

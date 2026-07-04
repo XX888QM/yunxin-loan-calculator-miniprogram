@@ -400,7 +400,7 @@
 }
 
 .schedule-action.export {
-  width: 116rpx;
+  width: 132rpx;
   background: #1677ff;
   color: #ffffff;
 }
