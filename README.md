@@ -20,8 +20,9 @@
 ## 开发
 
 1. 用微信开发者工具打开本目录。
-2. 当前 `project.config.json` 已写入 AppID；预览/上传需要当前微信号是该小程序开发者。
-3. 本地计算核心自检：
+2. 开源仓库里的 `project.config.json` 使用 `touristappid`，真实 AppID 请放在本地未提交的 `project.private.config.json`。
+3. 预览/上传需要当前微信号是该小程序开发者。
+4. 本地计算核心自检：
 
 ```bash
 npm test
