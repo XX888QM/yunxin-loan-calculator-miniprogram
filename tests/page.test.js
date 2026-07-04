@@ -261,6 +261,7 @@ const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 
 assert.ok(!wxml.includes('\u5398'))
 assert.ok(wxml.includes('月份'))
 assert.ok(wxml.includes('bindtap="exportSchedulePdf"'))
+assert.ok(wxml.includes('open-type="share"'))
 
 const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 'utf8')
 assert.ok(wxss.includes('grid-template-columns: 128rpx 148rpx 148rpx 148rpx 148rpx'))
