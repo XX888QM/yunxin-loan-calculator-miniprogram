@@ -281,13 +281,29 @@
       <text class="{{prepayForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="prepayForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
     </view>
     <view class="segmented two">
+      <text class="{{prepayForm.penaltyMode == 'percent' ? 'active' : ''}}" data-form="prepayForm" data-field="penaltyMode" data-value="percent" bindtap="setFormValue">违约金%</text>
+      <text class="{{prepayForm.penaltyMode == 'amount' ? 'active' : ''}}" data-form="prepayForm" data-field="penaltyMode" data-value="amount" bindtap="setFormValue">违约金额</text>
+    </view>
+    <view class="field" wx:if="{{prepayForm.penaltyMode == 'percent'}}">
+      <text class="label">违约金比例</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="按提前还款额收，常见2~3，没有留空" type="digit" value="{{prepayForm.penaltyPercent}}" data-form="prepayForm" data-field="penaltyPercent" bindinput="onInput" />
+      <text class="unit">%</text>
+    </view>
+    <view class="field" wx:if="{{prepayForm.penaltyMode == 'amount'}}">
+      <text class="label">违约金额</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="固定违约金" type="digit" value="{{prepayForm.penaltyAmount}}" data-form="prepayForm" data-field="penaltyAmount" bindinput="onInput" />
+      <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
       <text class="{{prepayForm.reduceMode == 'term' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="term" bindtap="setFormValue">缩短期限</text>
       <text class="{{prepayForm.reduceMode == 'payment' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="payment" bindtap="setFormValue">降低月供</text>
     </view>
     <view class="result-grid">
       <view class="metric"><text>当前剩余本金</text><text>{{prepayResult.remainingBalance}}</text></view>
       <view class="metric"><text>还后本金</text><text>{{prepayResult.afterPrepayBalance}}</text></view>
-      <view class="metric main"><text>预计省利息</text><text>{{prepayResult.interestSaved}}</text></view>
+      <view class="metric"><text>预计省利息</text><text>{{prepayResult.interestSaved}}</text></view>
+      <view class="metric"><text>违约金</text><text>{{prepayResult.penalty}}</text></view>
+      <view class="metric main"><text>净省(扣违约金)</text><text class="{{prepayResult.netSavedNegative ? 'negative' : ''}}">{{prepayResult.netSaved}}</text></view>
       <view class="metric"><text>新剩余期数</text><text>{{prepayResult.newRemainingMonths}}期</text></view>
       <view class="metric"><text>原月供</text><text>{{prepayResult.oldMonthlyPayment}}</text></view>
       <view class="metric"><text>新月供</text><text>{{prepayResult.newMonthlyPayment}}</text></view>

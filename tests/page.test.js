@@ -136,6 +136,29 @@ const feeResult = page.buildActualResult()
 assert.ok(parseFloat(feeResult.feeAdjustedMonthlyRate) > parseFloat(feeResult.monthlyRate))
 assert.ok(feeResult.copyText.includes('含费'))
 
+page.data.prepayForm = {
+  principal: '350000',
+  months: '36',
+  annualRate: '13.14',
+  rateMode: 'annual',
+  paidMonths: '12',
+  prepayAmount: '50000',
+  reduceMode: 'term',
+  penaltyMode: 'percent',
+  penaltyPercent: '3',
+  penaltyAmount: '',
+  unit: 'yuan'
+}
+const prepayRes = page.buildPrepayResult()
+assert.strictEqual(prepayRes.penalty, '1,500.00')
+assert.strictEqual(prepayRes.netSavedNegative, false)
+assert.ok(prepayRes.copyText.includes('净省'))
+
+page.data.prepayForm.paidMonths = '34'
+page.data.prepayForm.prepayAmount = '20000'
+page.data.prepayForm.penaltyPercent = '10'
+assert.strictEqual(page.buildPrepayResult().netSavedNegative, true)
+
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))
 

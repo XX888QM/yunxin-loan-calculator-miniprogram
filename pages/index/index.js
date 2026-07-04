@@ -164,6 +164,9 @@ Page({
       paidMonths: '',
       prepayAmount: '',
       reduceMode: 'term',
+      penaltyMode: 'percent',
+      penaltyPercent: '',
+      penaltyAmount: '',
       unit: 'wan'
     },
     paymentResult: {},
@@ -456,13 +459,17 @@ Page({
       form.months,
       form.paidMonths,
       amount(form.prepayAmount, form.unit),
-      form.reduceMode
+      form.reduceMode,
+      form.penaltyMode === 'percent' ? loan.toNumber(form.penaltyPercent) : 0,
+      form.penaltyMode === 'amount' ? amount(form.penaltyAmount, form.unit) : 0
     )
     const copyText = [
       ...this.loanContextLines(),
       `剩余本金：${money(result.remainingBalance)} 元`,
       `提前还款后本金：${money(result.afterPrepayBalance)} 元`,
       `节省利息：${money(result.interestSaved)} 元`,
+      `违约金：${money(result.penalty)} 元`,
+      `净省(扣违约金)：${money(result.netSaved)} 元`,
       `原剩余期数：${result.oldRemainingMonths} 期`,
       `新剩余期数：${result.newRemainingMonths} 期`,
       `新月供：${money(result.newMonthlyPayment)} 元`
@@ -474,6 +481,9 @@ Page({
       oldRemainingInterest: money(result.oldRemainingInterest),
       newRemainingInterest: money(result.newRemainingInterest),
       interestSaved: money(result.interestSaved),
+      penalty: money(result.penalty),
+      netSaved: money(result.netSaved),
+      netSavedNegative: result.netSaved < 0,
       oldRemainingMonths: result.oldRemainingMonths,
       newRemainingMonths: result.newRemainingMonths,
       oldMonthlyPayment: money(result.oldMonthlyPayment),
