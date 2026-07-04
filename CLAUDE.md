@@ -39,6 +39,7 @@ node --check utils/loan.js  # 语法检查
 ### pages/index/index.js — 单页多工具（ES6：const/箭头函数）
 
 - 每个工具一个 `build*Result()` 方法；`recalculate()` 全量重建所有结果，并按 `activeTool` 切换 `activeSchedulePreview`。
+- 首页定义 `onShareAppMessage` / `onShareTimeline` 并在 `onLoad` 调 `wx.showShareMenu`，导出 PDF 前必须先触发任意一种分享入口。
 - 表单全存 `data.xxxForm`；事件只有三个通用 handler（`onInput`/`setFormValue`/`setMonths`），由 WXML 的 `data-form`/`data-field`/`data-value` 驱动。成对字段的互斥清空写在 handler 里（`downRatio`↔`downPayment`、`balloonRatio`↔`balloonAmount`）。
 - **万/元换算只发生在页面层**：`amount(value, unit)`（unit==='wan' 时 ×10000），引擎永远收元；月供/月租/月供预算类字段永远按元、不参与换算。
 - 工具导航按贷款类型过滤：`TOOL_OPTIONS.car`（含尾款贷 balloon）、`TOOL_OPTIONS.home`（含组合贷 combo、能贷多少 budget、提前还款 prepay）；快捷期数同理走 `TERM_OPTIONS`。

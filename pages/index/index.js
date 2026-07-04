@@ -106,6 +106,12 @@ const TOOL_OPTIONS = {
   ]
 }
 
+const SHARE_INFO = {
+  title: '云鑫真实贷款计算器',
+  path: '/pages/index/index',
+  imageUrl: '/assets/logo.png'
+}
+
 function optionLabel(list, value) {
   const hit = list.find(function (item) {
     return item.value === value
@@ -211,11 +217,39 @@ Page({
     rtoResult: {},
     prepayResult: {},
     scheduleStartYm: '',
-    activeSchedulePreview: []
+    activeSchedulePreview: [],
+    pdfShareUnlocked: false
   },
 
   onLoad() {
+    this.enableShareMenus()
     this.recalculate()
+  },
+
+  enableShareMenus() {
+    if (!wx.showShareMenu) return
+    wx.showShareMenu({
+      menus: ['shareAppMessage', 'shareTimeline']
+    })
+  },
+
+  unlockPdfExport() {
+    if (this.data.pdfShareUnlocked) return
+    this.setData({ pdfShareUnlocked: true })
+  },
+
+  onShareAppMessage() {
+    this.unlockPdfExport()
+    return SHARE_INFO
+  },
+
+  onShareTimeline() {
+    this.unlockPdfExport()
+    return {
+      title: SHARE_INFO.title,
+      query: '',
+      imageUrl: SHARE_INFO.imageUrl
+    }
   },
 
   switchTool(event) {
@@ -303,6 +337,16 @@ Page({
   },
 
   exportSchedulePdf() {
+    if (!this.data.pdfShareUnlocked) {
+      wx.showModal({
+        title: '先分享再导出',
+        content: '请先点右上角「···」转发给朋友或分享到朋友圈，分享后即可导出PDF。',
+        confirmText: '知道了',
+        showCancel: false
+      })
+      return
+    }
+
     const rows = this.data.activeSchedulePreview || []
     if (!rows.length) {
       wx.showToast({ title: '暂无明细', icon: 'none' })

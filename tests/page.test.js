@@ -5,9 +5,14 @@ const path = require('path')
 let page
 let writtenFile
 let openedFile
+let modalOptions
+let shareMenuOptions
 global.wx = {
   env: { USER_DATA_PATH: '/tmp' },
   setClipboardData() {},
+  showShareMenu(options) {
+    shareMenuOptions = options
+  },
   getFileSystemManager() {
     return {
       writeFile(options) {
@@ -18,6 +23,9 @@ global.wx = {
   },
   openDocument(options) {
     openedFile = options
+  },
+  showModal(options) {
+    modalOptions = options
   },
   showToast() {}
 }
@@ -44,7 +52,8 @@ page.setData = function (patch, callback) {
   if (callback) callback()
 }
 
-page.recalculate()
+page.onLoad()
+assert.deepStrictEqual(shareMenuOptions.menus, ['shareAppMessage', 'shareTimeline'])
 assert.strictEqual(page.data.loanType, 'car')
 assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算', '尾款贷'])
 assert.deepStrictEqual(page.data.termOptionList.map((item) => item.label), ['12期', '24期', '36期', '48期', '60期'])
@@ -224,10 +233,27 @@ assert.deepStrictEqual(calRows.map((row) => row.label), ['2026-11', '2026-12', '
 page.data.activeTool = 'payment'
 page.data.loanType = 'car'
 page.data.activeSchedulePreview = calRows
+page.data.pdfShareUnlocked = false
+writtenFile = undefined
+openedFile = undefined
+modalOptions = undefined
+page.exportSchedulePdf()
+assert.strictEqual(modalOptions.title, '先分享再导出')
+assert.strictEqual(writtenFile, undefined)
+
+const friendShare = page.onShareAppMessage()
+assert.strictEqual(friendShare.title, '云鑫真实贷款计算器')
+assert.strictEqual(friendShare.path, '/pages/index/index')
+assert.strictEqual(page.data.pdfShareUnlocked, true)
 page.exportSchedulePdf()
 assert.ok(writtenFile.filePath.endsWith('.pdf'))
 assert.ok(writtenFile.data instanceof ArrayBuffer)
 assert.strictEqual(openedFile.fileType, 'pdf')
+
+page.data.pdfShareUnlocked = false
+const timelineShare = page.onShareTimeline()
+assert.strictEqual(timelineShare.title, '云鑫真实贷款计算器')
+assert.strictEqual(page.data.pdfShareUnlocked, true)
 page.data.scheduleStartYm = ''
 assert.strictEqual(page.buildPaymentResult().schedulePreview[0].label, '1')
 
