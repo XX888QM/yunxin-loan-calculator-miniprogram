@@ -41,13 +41,14 @@ node --check utils/loan.js  # 语法检查
 - 每个工具一个 `build*Result()` 方法；`recalculate()` 全量重建所有结果，并按 `activeTool` 切换 `activeSchedulePreview`。
 - 表单全存 `data.xxxForm`；事件只有三个通用 handler（`onInput`/`setFormValue`/`setMonths`），由 WXML 的 `data-form`/`data-field`/`data-value` 驱动。成对字段的互斥清空写在 handler 里（`downRatio`↔`downPayment`、`balloonRatio`↔`balloonAmount`）。
 - **万/元换算只发生在页面层**：`amount(value, unit)`（unit==='wan' 时 ×10000），引擎永远收元；月供/月租/月供预算类字段永远按元、不参与换算。
-- 工具导航按贷款类型过滤：`TOOL_OPTIONS.car`（含尾款贷 balloon、租购 rto）、`TOOL_OPTIONS.home`（含组合贷 combo、能贷多少 budget、提前还款 prepay）；快捷期数同理走 `TERM_OPTIONS`。
+- 工具导航按贷款类型过滤：`TOOL_OPTIONS.car`（含尾款贷 balloon）、`TOOL_OPTIONS.home`（含组合贷 combo、能贷多少 budget、提前还款 prepay）；快捷期数同理走 `TERM_OPTIONS`。
 
 ### WXML/WXSS
 
 - 复用固定类名体系：`field/label/input/unit`、`segmented(.two)`、`quick-row`、`result-grid/metric(.main)`、`panel`。新面板照抄现有结构，不引入新样式体系。
 - 品牌资源放在 `assets/`；顶部 logo 使用 `assets/logo.png`，保持小图资源低于微信代码质量建议的 200K。
 - 公开仓库的 `project.config.json` 使用 `touristappid`；真实 AppID 只放本地未提交的 `project.private.config.json`。
+- 发布包通过 `project.config.json` 的 `packOptions.ignore` 排除 docs/tests/README/CLAUDE/package.json 这类开发资料。
 
 ## 测试约定
 
@@ -57,10 +58,10 @@ node --check utils/loan.js  # 语法检查
 
 ## 合规红线（测试有锁，不可违反）
 
-- 租购"定价反推"的复制文案**不得出现"目标""收益"字样**（page.test.js 断言）——定价是对内工具，对外文案只给方案本身。
+- 发布版不在车贷工具入口展示租购；租购"定价反推"的复制文案**不得出现"目标""收益"字样**（page.test.js 断言）——定价是对内工具，对外文案只给方案本身。
 - WXML 不得出现"厘"字（page.test.js 断言，历史上删除过"月息厘"模式）。
 - 页面文案不点名任何银行/机构，用"真实资金成本/宣称口径/反推年化"等中性词（详见 docs/开发文档.md §11）。
-- 上线类目走"工具"类；"租购"Tab 涉及汽车融资租赁资质问题，公开发布版本前需评估是否隐藏该 Tab。
+- 上线类目走"工具"类；"租购"Tab 涉及汽车融资租赁资质问题，公开发布版默认隐藏入口。
 
 ## 文档同步
 

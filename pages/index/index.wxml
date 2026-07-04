@@ -182,7 +182,7 @@
     </view>
     <view class="field" wx:if="{{actualForm.inputMode == 'payment'}}">
       <text class="label">实际月供</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="输入银行给的月供" type="digit" value="{{actualForm.monthlyPayment}}" data-form="actualForm" data-field="monthlyPayment" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="输入合同月供" type="digit" value="{{actualForm.monthlyPayment}}" data-form="actualForm" data-field="monthlyPayment" bindinput="onInput" />
       <text class="unit">元</text>
     </view>
     <view class="field" wx:if="{{actualForm.inputMode == 'interest'}}">
@@ -336,13 +336,13 @@
       <text class="unit">{{rtoForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field" wx:if="{{rtoForm.mode == 'analyze'}}">
-      <text class="label">银行年化(选填)</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="填了对比银行车贷" type="digit" value="{{rtoForm.bankAnnualRate}}" data-form="rtoForm" data-field="bankAnnualRate" bindinput="onInput" />
+      <text class="label">对比年化(选填)</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="填了对比普通车贷" type="digit" value="{{rtoForm.bankAnnualRate}}" data-form="rtoForm" data-field="bankAnnualRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="field" wx:if="{{rtoForm.mode == 'pricing'}}">
-      <text class="label">目标年化</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="想要的年化收益" type="digit" value="{{rtoForm.targetAnnualRate}}" data-form="rtoForm" data-field="targetAnnualRate" bindinput="onInput" />
+      <text class="label">参考年化</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="用于反推月租" type="digit" value="{{rtoForm.targetAnnualRate}}" data-form="rtoForm" data-field="targetAnnualRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="result-grid" wx:if="{{rtoResult.mode == 'analyze'}}">
@@ -350,7 +350,7 @@
       <view class="metric"><text>比全款多花</text><text>{{rtoResult.premiumOverCash}}</text></view>
       <view class="metric"><text>隐含月利率</text><text>{{rtoResult.impliedMonthlyRate}}</text></view>
       <view class="metric"><text>隐含复利年化</text><text>{{rtoResult.impliedAnnualEffectiveRate}}</text></view>
-      <view class="metric" wx:if="{{rtoResult.bankCompare}}"><text>比银行车贷多花</text><text>{{rtoResult.bankCompare}}</text></view>
+      <view class="metric" wx:if="{{rtoResult.bankCompare}}"><text>比普通车贷多花</text><text>{{rtoResult.bankCompare}}</text></view>
     </view>
     <view class="result-grid" wx:if="{{rtoResult.mode == 'pricing'}}">
       <view class="metric main"><text>月租定价</text><text>{{rtoResult.monthlyRent}}</text></view>

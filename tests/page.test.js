@@ -46,7 +46,7 @@ page.setData = function (patch, callback) {
 
 page.recalculate()
 assert.strictEqual(page.data.loanType, 'car')
-assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算', '尾款贷', '租购'])
+assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算', '尾款贷'])
 assert.deepStrictEqual(page.data.termOptionList.map((item) => item.label), ['12期', '24期', '36期', '48期', '60期'])
 assert.ok(page.data.paymentResult.copyText.includes('贷款类型：车贷'))
 

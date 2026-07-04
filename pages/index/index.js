@@ -96,8 +96,7 @@ const TOOL_OPTIONS = {
     { value: 'payment', label: '算月供' },
     { value: 'actual', label: '查真利率' },
     { value: 'flat', label: '平息换算' },
-    { value: 'balloon', label: '尾款贷' },
-    { value: 'rto', label: '租购' }
+    { value: 'balloon', label: '尾款贷' }
   ],
   home: [
     { value: 'payment', label: '算月供' },
@@ -568,7 +567,7 @@ Page({
     if (form.mode === 'pricing') {
       const pricing = loan.calcRentPricing(carPrice, downPayment, months, buyout, loan.toNumber(form.targetAnnualRate))
       const copyText = this.loanContextLines().concat([
-        '以租代购方案',
+        '租金方案',
         `首付/保证金：${money(downPayment)} 元`,
         `月租：${money(pricing.monthlyRent)} 元 × ${months} 期`,
         `期满尾款：${money(buyout)} 元`,
@@ -591,12 +590,12 @@ Page({
       bankCompare = money(rto.totalCost - (bank.totalPayment + downPayment))
     }
     const copyText = this.loanContextLines().concat([
-      '以租代购测算',
+      '租金测算',
       `首付/保证金：${money(downPayment)} 元，月租 ${money(rto.monthlyRent)} 元 × ${months} 期，尾款 ${money(buyout)} 元`,
       `总费用：${money(rto.totalCost)} 元`,
       carPrice > 0 ? `比一次性买车多花：${money(rto.premiumOverCash)} 元` : '',
       rto.hasImpliedRate ? `隐含月利率：${percent(rto.impliedMonthlyRate, 4)}，隐含复利年化：${percent(rto.impliedAnnualEffectiveRate, 2)}` : '',
-      bankCompare ? `比银行车贷多花：${bankCompare} 元` : ''
+      bankCompare ? `比普通车贷多花：${bankCompare} 元` : ''
     ]).filter(Boolean).join('\n')
 
     return {
