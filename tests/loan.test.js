@@ -61,4 +61,15 @@ assert.strictEqual(loan.toNumber(',', 5), 5)
 assert.strictEqual(loan.toNumber(''), 0)
 assert.strictEqual(loan.toNumber('1,234.5'), 1234.5)
 
+// balloon=0 与旧行为一致
+closeTo(loan.inferMonthlyRateFromPayment(350000, 11816.5, 36, 0), 0.01095, 0.000001)
+// 尾款往返：闭式月供反推应还原利率
+;(function () {
+  const P = 200000, B = 80000, m = 36, r = 0.012
+  const pay = (P - B / Math.pow(1 + r, m)) * r / (1 - Math.pow(1 + r, -m))
+  closeTo(loan.inferMonthlyRateFromPayment(P, pay, m, B), r, 0.0000001)
+})()
+// 月供×期数+尾款 恰好等于本金 → 零利率
+assert.strictEqual(loan.inferMonthlyRateFromPayment(120000, 3000, 12, 84000), 0)
+
 console.log('loan calculator checks passed')

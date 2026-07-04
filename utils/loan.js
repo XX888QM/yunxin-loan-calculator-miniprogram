@@ -144,30 +144,31 @@ function calculateByMethod(principal, annualRatePercent, months, method) {
   return calcEqualInstallment(principal, annualRatePercent, months)
 }
 
-function presentValueOfPayment(monthlyPayment, months, monthlyRate) {
+function presentValueOfPayment(monthlyPayment, months, monthlyRate, balloon) {
   var pv = 0
   for (var i = 1; i <= months; i += 1) {
     pv += monthlyPayment / Math.pow(1 + monthlyRate, i)
   }
-  return pv
+  return pv + (balloon || 0) / Math.pow(1 + monthlyRate, months)
 }
 
-function inferMonthlyRateFromPayment(principal, monthlyPayment, months) {
+function inferMonthlyRateFromPayment(principal, monthlyPayment, months, balloon) {
   principal = nonNegative(principal)
   monthlyPayment = nonNegative(monthlyPayment)
+  balloon = nonNegative(balloon)
   months = normalizeMonths(months)
   if (principal <= 0 || monthlyPayment <= 0) return 0
-  if (monthlyPayment <= principal / months) return 0
+  if (monthlyPayment * months + balloon <= principal) return 0
 
   var low = 0
   var high = 0.02
-  while (presentValueOfPayment(monthlyPayment, months, high) > principal && high < 1) {
+  while (presentValueOfPayment(monthlyPayment, months, high, balloon) > principal && high < 1) {
     high *= 2
   }
 
   for (var i = 0; i < 80; i += 1) {
     var mid = (low + high) / 2
-    if (presentValueOfPayment(monthlyPayment, months, mid) > principal) {
+    if (presentValueOfPayment(monthlyPayment, months, mid, balloon) > principal) {
       low = mid
     } else {
       high = mid
