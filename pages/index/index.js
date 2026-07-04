@@ -84,7 +84,8 @@ const TOOL_OPTIONS = {
   car: [
     { value: 'payment', label: '算月供' },
     { value: 'actual', label: '查真利率' },
-    { value: 'flat', label: '平息换算' }
+    { value: 'flat', label: '平息换算' },
+    { value: 'balloon', label: '尾款贷' }
   ],
   home: [
     { value: 'payment', label: '算月供' },
@@ -109,6 +110,7 @@ Page({
     toolList: TOOL_OPTIONS.car,
     activeTool: 'payment',
     downRatioOptions: ['20', '30', '40', '50'],
+    balloonRatioOptions: ['30', '40', '50'],
     paymentForm: {
       principal: '',
       months: '',
@@ -156,6 +158,15 @@ Page({
       rateMode: 'monthly',
       unit: 'yuan'
     },
+    balloonForm: {
+      principal: '',
+      months: '',
+      annualRate: '',
+      rateMode: 'annual',
+      balloonRatio: '',
+      balloonAmount: '',
+      unit: 'yuan'
+    },
     prepayForm: {
       principal: '',
       months: '',
@@ -174,6 +185,7 @@ Page({
     budgetResult: {},
     actualResult: {},
     flatResult: {},
+    balloonResult: {},
     prepayResult: {},
     activeSchedulePreview: []
   },
@@ -253,6 +265,7 @@ Page({
       budget: this.data.budgetResult.copyText,
       actual: this.data.actualResult.copyText,
       flat: this.data.flatResult.copyText,
+      balloon: this.data.balloonResult.copyText,
       prepay: this.data.prepayResult.copyText
     }
     wx.setClipboardData({
@@ -266,11 +279,13 @@ Page({
     const budgetResult = this.buildBudgetResult()
     const actualResult = this.buildActualResult()
     const flatResult = this.buildFlatResult()
+    const balloonResult = this.buildBalloonResult()
     const prepayResult = this.buildPrepayResult()
     const schedules = {
       payment: paymentResult.schedulePreview,
       combo: comboResult.schedulePreview,
       budget: budgetResult.schedulePreview,
+      balloon: balloonResult.schedulePreview,
       prepay: prepayResult.schedulePreview
     }
 
@@ -280,6 +295,7 @@ Page({
       budgetResult,
       actualResult,
       flatResult,
+      balloonResult,
       prepayResult,
       activeSchedulePreview: schedules[this.data.activeTool] || []
     })
@@ -446,6 +462,39 @@ Page({
       actualMonthlyRate: percent(result.actualMonthlyRate, 4),
       actualAnnualNominalRate: percent(result.actualAnnualNominalRate, 2),
       actualAnnualEffectiveRate: percent(result.actualAnnualEffectiveRate, 2),
+      copyText
+    }
+  },
+
+  buildBalloonResult() {
+    const form = this.data.balloonForm
+    const principal = amount(form.principal, form.unit)
+    const balloonAmount = form.balloonRatio
+      ? principal * loan.toNumber(form.balloonRatio) / 100
+      : amount(form.balloonAmount, form.unit)
+    const annualRate = asAnnualRate(form.annualRate, form.rateMode)
+    const result = loan.calcBalloonLoan(principal, annualRate, form.months, balloonAmount)
+    const normal = loan.calcEqualInstallment(principal, annualRate, form.months)
+    const copyText = [
+      ...this.loanContextLines(),
+      `贷款本金：${money(result.principal)} 元`,
+      `尾款：${money(result.balloonAmount)} 元`,
+      rateText(form.annualRate, form.rateMode),
+      `月供：${money(result.monthlyPayment)} 元`,
+      `末期还款(含尾款)：${money(result.lastPayment)} 元`,
+      `总利息：${money(result.totalInterest)} 元`,
+      `对比等额本息：月供 ${money(normal.monthlyPayment)} 元 / 总利息 ${money(normal.totalInterest)} 元`
+    ].join('\n')
+
+    return {
+      monthlyPayment: money(result.monthlyPayment),
+      balloonAmount: money(result.balloonAmount),
+      lastPayment: money(result.lastPayment),
+      totalInterest: money(result.totalInterest),
+      totalPayment: money(result.totalPayment),
+      normalMonthly: money(normal.monthlyPayment),
+      normalInterest: money(normal.totalInterest),
+      schedulePreview: schedulePreview(result.schedule),
       copyText
     }
   },

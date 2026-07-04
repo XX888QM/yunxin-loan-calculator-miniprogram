@@ -29,7 +29,7 @@ page.setData = function (patch, callback) {
 
 page.recalculate()
 assert.strictEqual(page.data.loanType, 'car')
-assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算'])
+assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算', '尾款贷'])
 assert.deepStrictEqual(page.data.termOptionList.map((item) => item.label), ['12期', '24期', '36期', '48期', '60期'])
 assert.ok(page.data.paymentResult.copyText.includes('贷款类型：车贷'))
 
@@ -158,6 +158,20 @@ page.data.prepayForm.paidMonths = '34'
 page.data.prepayForm.prepayAmount = '20000'
 page.data.prepayForm.penaltyPercent = '10'
 assert.strictEqual(page.buildPrepayResult().netSavedNegative, true)
+
+page.data.balloonForm = {
+  principal: '200000',
+  months: '36',
+  annualRate: '14.4',
+  rateMode: 'annual',
+  balloonRatio: '40',
+  balloonAmount: '',
+  unit: 'yuan'
+}
+const balloonRes = page.buildBalloonResult()
+assert.ok(balloonRes.copyText.includes('尾款：80,000.00 元'))
+assert.ok(parseFloat(balloonRes.monthlyPayment.replace(/,/g, '')) < parseFloat(balloonRes.normalMonthly.replace(/,/g, '')))
+assert.ok(balloonRes.schedulePreview.length === 36)
 
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))

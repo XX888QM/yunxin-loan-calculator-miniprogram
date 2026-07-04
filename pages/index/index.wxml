@@ -246,6 +246,51 @@
     </view>
   </view>
 
+  <view wx:if="{{activeTool == 'balloon'}}" class="panel">
+    <view class="field">
+      <text class="label">贷款本金</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款金额" type="digit" value="{{balloonForm.principal}}" data-form="balloonForm" data-field="principal" bindinput="onInput" />
+      <text class="unit">{{balloonForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{balloonForm.unit == 'yuan' ? 'active' : ''}}" data-form="balloonForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+      <text class="{{balloonForm.unit == 'wan' ? 'active' : ''}}" data-form="balloonForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
+    </view>
+    <view class="field">
+      <text class="label">还款期数</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="输入还款期数" type="number" value="{{balloonForm.months}}" data-form="balloonForm" data-field="months" bindinput="onInput" />
+      <text class="unit">期</text>
+    </view>
+    <view class="quick-row">
+      <text wx:for="{{termOptionList}}" wx:key="value" data-form="balloonForm" data-value="{{item.value}}" bindtap="setMonths">{{item.label}}</text>
+    </view>
+    <view class="field">
+      <text class="label">{{balloonForm.rateMode == 'monthly' ? '月息%' : '年化%'}}</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="{{balloonForm.rateMode == 'monthly' ? '例如 0.59' : '例如 13.14'}}" type="digit" value="{{balloonForm.annualRate}}" data-form="balloonForm" data-field="annualRate" bindinput="onInput" />
+      <text class="unit">%</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{balloonForm.rateMode == 'annual' ? 'active' : ''}}" data-form="balloonForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
+      <text class="{{balloonForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="balloonForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+    </view>
+    <view class="quick-row">
+      <text wx:for="{{balloonRatioOptions}}" wx:key="*this" data-form="balloonForm" data-field="balloonRatio" data-value="{{item}}" bindtap="setFormValue">尾款{{item}}%</text>
+    </view>
+    <view class="field">
+      <text class="label">尾款{{balloonForm.balloonRatio ? balloonForm.balloonRatio + '%' : '金额'}}</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="自定义尾款金额" type="digit" value="{{balloonForm.balloonAmount}}" data-form="balloonForm" data-field="balloonAmount" bindinput="onInput" />
+      <text class="unit">{{balloonForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="result-grid">
+      <view class="metric main"><text>月供</text><text>{{balloonResult.monthlyPayment}}</text></view>
+      <view class="metric"><text>末期还款(含尾款)</text><text>{{balloonResult.lastPayment}}</text></view>
+      <view class="metric"><text>总利息</text><text>{{balloonResult.totalInterest}}</text></view>
+      <view class="metric"><text>还款总额</text><text>{{balloonResult.totalPayment}}</text></view>
+      <view class="metric"><text>等额本息月供</text><text>{{balloonResult.normalMonthly}}</text></view>
+      <view class="metric"><text>等额本息总利息</text><text>{{balloonResult.normalInterest}}</text></view>
+    </view>
+  </view>
+
   <view wx:if="{{activeTool == 'prepay'}}" class="panel">
     <view class="field">
       <text class="label">贷款本金</text>
