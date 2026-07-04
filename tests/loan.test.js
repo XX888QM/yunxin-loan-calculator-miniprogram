@@ -91,4 +91,24 @@ closeTo(loan.calcBalloonLoan(120000, 0, 12, 60000).lastPayment, 65000, 0.000001)
 // 尾款超本金 → 夹到本金，月供=纯利息
 closeTo(loan.calcBalloonLoan(100000, 12, 12, 999999).monthlyPayment, 1000, 0.01)
 
+;(function () {
+  const price = 200000, down = 20000, B = 50000, m = 36, r = 0.015
+  const financed = price - down
+  const rent = (financed - B / Math.pow(1 + r, m)) * r / (1 - Math.pow(1 + r, -m))
+  const res = loan.calcRentToOwn(price, down, rent, m, B)
+  closeTo(res.impliedMonthlyRate, r, 0.0000001)
+  closeTo(res.totalCost, down + rent * m + B, 0.01)
+  closeTo(res.premiumOverCash, res.totalCost - price, 0.000001)
+  assert.strictEqual(res.hasImpliedRate, true)
+  closeTo(res.impliedAnnualEffectiveRate, Math.pow(1 + r, 12) - 1, 0.000001)
+})()
+// 车价缺省(0)：不算隐含利率、溢价为0，总费用照算
+;(function () {
+  const res = loan.calcRentToOwn(0, 10000, 3000, 24, 20000)
+  assert.strictEqual(res.hasImpliedRate, false)
+  assert.strictEqual(res.impliedMonthlyRate, 0)
+  assert.strictEqual(res.premiumOverCash, 0)
+  closeTo(res.totalCost, 10000 + 3000 * 24 + 20000, 0.01)
+})()
+
 console.log('loan calculator checks passed')

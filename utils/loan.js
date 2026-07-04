@@ -298,6 +298,31 @@ function calcBalloonLoan(principal, annualRatePercent, months, balloonAmount) {
   return result
 }
 
+function calcRentToOwn(carPrice, downPayment, monthlyRent, months, buyout) {
+  carPrice = nonNegative(carPrice)
+  downPayment = nonNegative(downPayment)
+  monthlyRent = nonNegative(monthlyRent)
+  buyout = nonNegative(buyout)
+  months = normalizeMonths(months)
+  var financed = Math.max(0, carPrice - downPayment)
+  var hasImpliedRate = financed > 0 && monthlyRent > 0
+  var impliedMonthlyRate = hasImpliedRate ? inferMonthlyRateFromPayment(financed, monthlyRent, months, buyout) : 0
+  var totalCost = downPayment + monthlyRent * months + buyout
+  return {
+    carPrice: carPrice,
+    downPayment: downPayment,
+    monthlyRent: monthlyRent,
+    months: months,
+    buyout: buyout,
+    totalCost: totalCost,
+    premiumOverCash: carPrice > 0 ? totalCost - carPrice : 0,
+    hasImpliedRate: hasImpliedRate,
+    impliedMonthlyRate: impliedMonthlyRate,
+    impliedAnnualNominalRate: impliedMonthlyRate * 12,
+    impliedAnnualEffectiveRate: Math.pow(1 + impliedMonthlyRate, 12) - 1
+  }
+}
+
 function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   var schedule = []
   var current = nonNegative(balance)
@@ -389,6 +414,7 @@ module.exports = {
   calcCompositeLoan: calcCompositeLoan,
   calcAffordableLoan: calcAffordableLoan,
   calcBalloonLoan: calcBalloonLoan,
+  calcRentToOwn: calcRentToOwn,
   calcPrepayment: calcPrepayment,
   inferMonthlyRateFromPayment: inferMonthlyRateFromPayment
 }
