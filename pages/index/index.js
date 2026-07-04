@@ -70,6 +70,10 @@ function amount(value, unit) {
   return loan.toNumber(value) * (unit === 'wan' ? 10000 : 1)
 }
 
+function normalizeMonths(value) {
+  return loan.normalizeMonths(value)
+}
+
 const LOAN_TYPES = [
   { value: 'car', label: '车贷' },
   { value: 'home', label: '房贷' }
@@ -494,12 +498,12 @@ Page({
     const form = this.data.actualForm
     const principal = amount(form.principal, form.unit)
     const upfrontFee = amount(form.upfrontFee, form.unit)
-    const months = Math.max(1, Math.round(loan.toNumber(form.months)))
+    const termMonths = normalizeMonths(form.months)
     const monthlyPayment = form.inputMode === 'interest'
-      ? (principal + amount(form.totalInterest, form.unit)) / months
+      ? (principal + amount(form.totalInterest, form.unit)) / termMonths
       : loan.toNumber(form.monthlyPayment)
     const claimedMonthlyRate = asMonthlyRatePercent(form.claimedMonthlyRate, form.claimedRateMode)
-    const result = loan.calcActualRate(principal, monthlyPayment, months, claimedMonthlyRate, upfrontFee)
+    const result = loan.calcActualRate(principal, monthlyPayment, termMonths, claimedMonthlyRate, upfrontFee)
     const copyText = this.loanContextLines().concat([
       `本金：${money(result.principal)} 元`,
       `${form.inputMode === 'interest' ? '折算月供' : '月供'}：${money(result.monthlyPayment)} 元`,
@@ -588,14 +592,14 @@ Page({
     const carPrice = amount(form.carPrice, form.unit)
     const downPayment = amount(form.downPayment, form.unit)
     const buyout = amount(form.buyout, form.unit)
-    const months = Math.max(1, Math.round(loan.toNumber(form.months)))
+    const termMonths = normalizeMonths(form.months)
 
     if (form.mode === 'pricing') {
-      const pricing = loan.calcRentPricing(carPrice, downPayment, months, buyout, loan.toNumber(form.targetAnnualRate))
+      const pricing = loan.calcRentPricing(carPrice, downPayment, termMonths, buyout, loan.toNumber(form.targetAnnualRate))
       const copyText = this.loanContextLines().concat([
         '租金方案',
         `首付/保证金：${money(downPayment)} 元`,
-        `月租：${money(pricing.monthlyRent)} 元 × ${months} 期`,
+        `月租：${money(pricing.monthlyRent)} 元 × ${termMonths} 期`,
         `期满尾款：${money(buyout)} 元`,
         `总费用：${money(pricing.totalCost)} 元`
       ]).join('\n')
@@ -608,16 +612,16 @@ Page({
       }
     }
 
-    const rto = loan.calcRentToOwn(carPrice, downPayment, loan.toNumber(form.monthlyRent), months, buyout)
+    const rto = loan.calcRentToOwn(carPrice, downPayment, loan.toNumber(form.monthlyRent), termMonths, buyout)
     const bankRate = loan.toNumber(form.bankAnnualRate)
     let bankCompare = ''
     if (bankRate > 0 && carPrice > downPayment) {
-      const bank = loan.calcEqualInstallment(carPrice - downPayment, bankRate, months)
+      const bank = loan.calcEqualInstallment(carPrice - downPayment, bankRate, termMonths)
       bankCompare = money(rto.totalCost - (bank.totalPayment + downPayment))
     }
     const copyText = this.loanContextLines().concat([
       '租金测算',
-      `首付/保证金：${money(downPayment)} 元，月租 ${money(rto.monthlyRent)} 元 × ${months} 期，尾款 ${money(buyout)} 元`,
+      `首付/保证金：${money(downPayment)} 元，月租 ${money(rto.monthlyRent)} 元 × ${termMonths} 期，尾款 ${money(buyout)} 元`,
       `总费用：${money(rto.totalCost)} 元`,
       carPrice > 0 ? `比一次性买车多花：${money(rto.premiumOverCash)} 元` : '',
       rto.hasImpliedRate ? `隐含月利率：${percent(rto.impliedMonthlyRate, 4)}，隐含复利年化：${percent(rto.impliedAnnualEffectiveRate, 2)}` : '',

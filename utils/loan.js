@@ -415,7 +415,9 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
   var remainingMonths = months - paidMonths
   var newSchedule
 
-  if (reduceMode === 'payment') {
+  if (afterPrepayBalance <= 0.01) {
+    newSchedule = []
+  } else if (reduceMode === 'payment') {
     newSchedule = calcEqualInstallment(afterPrepayBalance, annualRatePercent, remainingMonths).schedule
   } else {
     newSchedule = calcFixedPaymentSchedule(afterPrepayBalance, base.monthlyRate, base.monthlyPayment, remainingMonths)
@@ -446,6 +448,7 @@ module.exports = {
   round: round,
   formatMoney: formatMoney,
   formatPercent: formatPercent,
+  normalizeMonths: normalizeMonths,
   calculateByMethod: calculateByMethod,
   calcEqualInstallment: calcEqualInstallment,
   calcEqualPrincipal: calcEqualPrincipal,

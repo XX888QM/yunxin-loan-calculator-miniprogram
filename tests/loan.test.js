@@ -60,6 +60,8 @@ assert.strictEqual(loan.toNumber('   ', 7), 7)
 assert.strictEqual(loan.toNumber(',', 5), 5)
 assert.strictEqual(loan.toNumber(''), 0)
 assert.strictEqual(loan.toNumber('1,234.5'), 1234.5)
+assert.strictEqual(loan.normalizeMonths(9999), 600)
+assert.strictEqual(loan.normalizeMonths(''), 1)
 
 // balloon=0 与旧行为一致
 closeTo(loan.inferMonthlyRateFromPayment(350000, 11816.5, 36, 0), 0.01095, 0.000001)
@@ -153,6 +155,14 @@ closeTo(loan.calcPrepayment(350000, 13.14, 36, 12, 50000, 'term', 3, 2000).penal
 ;(function () {
   const res = loan.calcPrepayment(350000, 13.14, 36, 12, 9999999, 'term', 3)
   closeTo(res.penalty, res.remainingBalance * 0.03, 0.01)
+})()
+// 一次还清且选择降低月供：不应保留空的剩余期数
+;(function () {
+  const res = loan.calcPrepayment(350000, 13.14, 36, 12, 9999999, 'payment', 3)
+  closeTo(res.afterPrepayBalance, 0, 0.01)
+  assert.strictEqual(res.newRemainingMonths, 0)
+  assert.strictEqual(res.newMonthlyPayment, 0)
+  assert.strictEqual(res.schedule.length, 0)
 })()
 // 净省可为负：临近结清还大额+高违约金
 assert.ok(loan.calcPrepayment(350000, 13.14, 36, 34, 20000, 'term', 10).netSaved < 0)

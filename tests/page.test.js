@@ -151,7 +151,12 @@ page.data.actualForm = {
 const interestModeResult = page.buildActualResult()
 assert.strictEqual(interestModeResult.monthlyRate, '1.0950%')
 
+page.data.actualForm.months = '9999'
+const cappedInterestMode = page.buildActualResult()
+assert.strictEqual(cappedInterestMode.totalPayment, '425,394.00')
+
 page.data.actualForm.inputMode = 'payment'
+page.data.actualForm.months = '36'
 page.data.actualForm.monthlyPayment = '11816.50'
 page.data.actualForm.upfrontFee = '10000'
 const feeResult = page.buildActualResult()
