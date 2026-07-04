@@ -351,16 +351,14 @@ Page({
     const priceLines = form.inputMode === 'price'
       ? [`车价：${money(carPrice)} 元`, `首付：${money(downPayment)} 元`]
       : []
-    const copyText = [
-      ...this.loanContextLines(),
-      ...priceLines,
+    const copyText = this.loanContextLines().concat(priceLines, [
       `贷款本金：${money(result.principal)} 元`,
       `还款方式：${methodName(form.method)}`,
       rateText(form.annualRate, form.rateMode),
       `${primaryLabel}：${money(primaryPayment)} 元`,
       `总利息：${money(result.totalInterest)} 元`,
       `还款总额：${money(result.totalPayment)} 元`
-    ].join('\n')
+    ]).join('\n')
 
     return {
       primaryLabel,
@@ -389,14 +387,13 @@ Page({
       form.method
     )
     const primaryPayment = form.method === 'equalPrincipal' ? result.firstPayment : result.monthlyPayment
-    const copyText = [
-      ...this.loanContextLines(),
+    const copyText = this.loanContextLines().concat([
       `组合贷本金：${money(result.principal)} 元`,
       `商贷：${money(amount(form.commercialPrincipal, form.unit))} 元，${rateText(form.commercialRate, form.rateMode)}`,
       `公积金：${money(amount(form.fundPrincipal, form.unit))} 元，${rateText(form.fundRate, form.rateMode)}`,
       `首月/每月：${money(primaryPayment)} 元`,
       `总利息：${money(result.totalInterest)} 元`
-    ].join('\n')
+    ]).join('\n')
 
     return {
       primaryPayment: money(primaryPayment),
@@ -413,8 +410,7 @@ Page({
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
     const result = loan.calcAffordableLoan(form.monthlyBudget, annualRate, form.months, form.method)
     const primaryPayment = form.method === 'equalPrincipal' ? result.firstPayment : result.monthlyPayment
-    const copyText = [
-      ...this.loanContextLines(),
+    const copyText = this.loanContextLines().concat([
       `月供预算：${money(loan.toNumber(form.monthlyBudget))} 元`,
       `可贷本金：${money(result.principal)} 元`,
       `还款方式：${methodName(form.method)}`,
@@ -422,7 +418,7 @@ Page({
       `首月/每月：${money(primaryPayment)} 元`,
       `总利息：${money(result.totalInterest)} 元`,
       `还款总额：${money(result.totalPayment)} 元`
-    ].join('\n')
+    ]).join('\n')
 
     return {
       principal: money(result.principal),
@@ -444,8 +440,7 @@ Page({
       : loan.toNumber(form.monthlyPayment)
     const claimedMonthlyRate = asMonthlyRatePercent(form.claimedMonthlyRate, form.claimedRateMode)
     const result = loan.calcActualRate(principal, monthlyPayment, months, claimedMonthlyRate, upfrontFee)
-    const copyText = [
-      ...this.loanContextLines(),
+    const copyText = this.loanContextLines().concat([
       `本金：${money(result.principal)} 元`,
       `${form.inputMode === 'interest' ? '折算月供' : '月供'}：${money(result.monthlyPayment)} 元`,
       `前置费用：${money(result.upfrontFee)} 元`,
@@ -456,7 +451,7 @@ Page({
       `复利年化：${percent(result.annualEffectiveRate, 2)}`,
       `含费复利年化：${percent(result.feeAdjustedAnnualEffectiveRate, 2)}`,
       `总利息：${money(result.totalInterest)} 元`
-    ].join('\n')
+    ]).join('\n')
 
     return {
       monthlyRate: percent(result.monthlyRate, 4),
@@ -476,15 +471,14 @@ Page({
     const form = this.data.flatForm
     const monthlyFlatRate = asMonthlyFlatRate(form.monthlyFlatRate, form.rateMode)
     const result = loan.calcFlatMonthly(amount(form.principal, form.unit), monthlyFlatRate, form.months)
-    const copyText = [
-      ...this.loanContextLines(),
+    const copyText = this.loanContextLines().concat([
       `平息${rateText(form.monthlyFlatRate, form.rateMode)}`,
       `折算月费率：${percent(result.flatMonthlyRate, 4)}`,
       `月供：${money(result.monthlyPayment)} 元`,
       `真实月利率：${percent(result.actualMonthlyRate, 4)}`,
       `真实复利年化：${percent(result.actualAnnualEffectiveRate, 2)}`,
       `总利息：${money(result.totalInterest)} 元`
-    ].join('\n')
+    ]).join('\n')
 
     return {
       monthlyPayment: money(result.monthlyPayment),
@@ -506,8 +500,7 @@ Page({
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
     const result = loan.calcBalloonLoan(principal, annualRate, form.months, balloonAmount)
     const normal = loan.calcEqualInstallment(principal, annualRate, form.months)
-    const copyText = [
-      ...this.loanContextLines(),
+    const copyText = this.loanContextLines().concat([
       `贷款本金：${money(result.principal)} 元`,
       `尾款：${money(result.balloonAmount)} 元`,
       rateText(form.annualRate, form.rateMode),
@@ -515,7 +508,7 @@ Page({
       `末期还款(含尾款)：${money(result.lastPayment)} 元`,
       `总利息：${money(result.totalInterest)} 元`,
       `对比等额本息：月供 ${money(normal.monthlyPayment)} 元 / 总利息 ${money(normal.totalInterest)} 元`
-    ].join('\n')
+    ]).join('\n')
 
     return {
       monthlyPayment: money(result.monthlyPayment),
@@ -539,14 +532,13 @@ Page({
 
     if (form.mode === 'pricing') {
       const pricing = loan.calcRentPricing(carPrice, downPayment, months, buyout, loan.toNumber(form.targetAnnualRate))
-      const copyText = [
-        ...this.loanContextLines(),
+      const copyText = this.loanContextLines().concat([
         '以租代购方案',
         `首付/保证金：${money(downPayment)} 元`,
         `月租：${money(pricing.monthlyRent)} 元 × ${months} 期`,
         `期满尾款：${money(buyout)} 元`,
         `总费用：${money(pricing.totalCost)} 元`
-      ].join('\n')
+      ]).join('\n')
       return {
         mode: 'pricing',
         monthlyRent: money(pricing.monthlyRent),
@@ -563,15 +555,14 @@ Page({
       const bank = loan.calcEqualInstallment(carPrice - downPayment, bankRate, months)
       bankCompare = money(rto.totalCost - (bank.totalPayment + downPayment))
     }
-    const copyText = [
-      ...this.loanContextLines(),
+    const copyText = this.loanContextLines().concat([
       '以租代购测算',
       `首付/保证金：${money(downPayment)} 元，月租 ${money(rto.monthlyRent)} 元 × ${months} 期，尾款 ${money(buyout)} 元`,
       `总费用：${money(rto.totalCost)} 元`,
       carPrice > 0 ? `比一次性买车多花：${money(rto.premiumOverCash)} 元` : '',
       rto.hasImpliedRate ? `隐含月利率：${percent(rto.impliedMonthlyRate, 4)}，隐含复利年化：${percent(rto.impliedAnnualEffectiveRate, 2)}` : '',
       bankCompare ? `比银行车贷多花：${bankCompare} 元` : ''
-    ].filter(Boolean).join('\n')
+    ]).filter(Boolean).join('\n')
 
     return {
       mode: 'analyze',
@@ -598,8 +589,7 @@ Page({
       form.penaltyMode === 'percent' ? loan.toNumber(form.penaltyPercent) : 0,
       form.penaltyMode === 'amount' ? amount(form.penaltyAmount, form.unit) : 0
     )
-    const copyText = [
-      ...this.loanContextLines(),
+    const copyText = this.loanContextLines().concat([
       `剩余本金：${money(result.remainingBalance)} 元`,
       `提前还款后本金：${money(result.afterPrepayBalance)} 元`,
       `节省利息：${money(result.interestSaved)} 元`,
@@ -608,7 +598,7 @@ Page({
       `原剩余期数：${result.oldRemainingMonths} 期`,
       `新剩余期数：${result.newRemainingMonths} 期`,
       `新月供：${money(result.newMonthlyPayment)} 元`
-    ].join('\n')
+    ]).join('\n')
 
     return {
       remainingBalance: money(result.remainingBalance),

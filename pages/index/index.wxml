@@ -1,14 +1,21 @@
 <view class="page">
   <view class="masthead">
-    <view>
-      <text class="eyebrow">REAL APR</text>
-      <text class="title">真实贷款计算器</text>
-      <text class="subtitle">选车贷或房贷，填金额、期数、利率，结果马上出来</text>
+    <view class="brand-block">
+      <view class="brand-mark">
+        <image class="brand-logo" src="/assets/logo.png" mode="aspectFill" />
+      </view>
+      <view class="masthead-copy">
+        <view class="brand-row">
+          <text class="title">云鑫真实贷款计算器</text>
+        </view>
+        <text class="subtitle">车贷房贷月供、利率、明细</text>
+      </view>
     </view>
     <button class="copy-btn" bindtap="copySummary">复制结果</button>
   </view>
 
-  <view class="loan-panel">
+  <view class="switch-card">
+    <text class="section-label">贷款类型</text>
     <view class="segmented two">
       <text wx:for="{{loanTypeList}}" wx:key="value" class="{{loanType == item.value ? 'active' : ''}}" data-value="{{item.value}}" bindtap="setLoanType">{{item.label}}</text>
     </view>
