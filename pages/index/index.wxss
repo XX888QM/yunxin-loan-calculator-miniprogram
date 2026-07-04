@@ -394,14 +394,14 @@
 }
 
 .table-inner {
-  min-width: 864rpx;
+  min-width: 752rpx;
 }
 
 .table-head,
 .table-row {
   display: grid;
-  grid-template-columns: 128rpx 176rpx 176rpx 176rpx 176rpx;
-  gap: 8rpx;
+  grid-template-columns: 128rpx 148rpx 148rpx 148rpx 148rpx;
+  gap: 4rpx;
   align-items: center;
   min-height: 62rpx;
   border-bottom: 2rpx solid #edf2ef;
