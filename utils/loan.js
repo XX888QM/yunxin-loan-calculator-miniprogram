@@ -323,6 +323,30 @@ function calcRentToOwn(carPrice, downPayment, monthlyRent, months, buyout) {
   }
 }
 
+function calcRentPricing(carPrice, downPayment, months, buyout, targetAnnualRatePercent) {
+  carPrice = nonNegative(carPrice)
+  downPayment = nonNegative(downPayment)
+  buyout = nonNegative(buyout)
+  months = normalizeMonths(months)
+  var r = monthlyRateFromAnnual(targetAnnualRatePercent)
+  var financed = Math.max(0, carPrice - downPayment)
+  var rent = isZeroRate(r)
+    ? (financed - buyout) / months
+    : (financed - buyout / Math.pow(1 + r, months)) * r / (1 - Math.pow(1 + r, -months))
+  rent = Math.max(0, rent)
+  var totalCost = downPayment + rent * months + buyout
+  return {
+    carPrice: carPrice,
+    downPayment: downPayment,
+    months: months,
+    buyout: buyout,
+    targetAnnualRate: nonNegative(targetAnnualRatePercent),
+    monthlyRent: rent,
+    totalCost: totalCost,
+    premiumOverCash: carPrice > 0 ? totalCost - carPrice : 0
+  }
+}
+
 function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   var schedule = []
   var current = nonNegative(balance)
@@ -415,6 +439,7 @@ module.exports = {
   calcAffordableLoan: calcAffordableLoan,
   calcBalloonLoan: calcBalloonLoan,
   calcRentToOwn: calcRentToOwn,
+  calcRentPricing: calcRentPricing,
   calcPrepayment: calcPrepayment,
   inferMonthlyRateFromPayment: inferMonthlyRateFromPayment
 }

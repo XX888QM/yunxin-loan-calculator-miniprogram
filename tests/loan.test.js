@@ -111,4 +111,16 @@ closeTo(loan.calcBalloonLoan(100000, 12, 12, 999999).monthlyPayment, 1000, 0.01)
   closeTo(res.totalCost, 10000 + 3000 * 24 + 20000, 0.01)
 })()
 
+// 定价 ↔ 测算 互为逆运算
+;(function () {
+  const pricing = loan.calcRentPricing(200000, 20000, 36, 50000, 18)
+  const back = loan.calcRentToOwn(200000, 20000, pricing.monthlyRent, 36, 50000)
+  closeTo(back.impliedAnnualNominalRate, 0.18, 0.000001)
+  closeTo(pricing.totalCost, 20000 + pricing.monthlyRent * 36 + 50000, 0.01)
+})()
+// 零利率：月租 = (融资额-尾款)/期数
+closeTo(loan.calcRentPricing(120000, 20000, 20, 40000, 0).monthlyRent, 3000, 0.000001)
+// 尾款已覆盖融资额 → 月租 0
+assert.strictEqual(loan.calcRentPricing(100000, 20000, 12, 200000, 10).monthlyRent, 0)
+
 console.log('loan calculator checks passed')
