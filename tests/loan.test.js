@@ -139,4 +139,26 @@ assert.strictEqual(loan.calcRentPricing(100000, 20000, 12, 200000, 10).monthlyRe
   closeTo(res.totalInterest, pay * m - 350000, 0.01)
 })()
 
+// 比例违约金：3% × 50000 = 1500
+;(function () {
+  const res = loan.calcPrepayment(350000, 13.14, 36, 12, 50000, 'term', 3)
+  closeTo(res.penalty, 1500, 0.000001)
+  closeTo(res.netSaved, res.interestSaved - 1500, 0.000001)
+})()
+// 固定额优先于比例
+closeTo(loan.calcPrepayment(350000, 13.14, 36, 12, 50000, 'term', 3, 2000).penalty, 2000, 0.000001)
+// 违约金按实际还入的钱算（提前额超过剩余本金时）
+;(function () {
+  const res = loan.calcPrepayment(350000, 13.14, 36, 12, 9999999, 'term', 3)
+  closeTo(res.penalty, res.remainingBalance * 0.03, 0.01)
+})()
+// 净省可为负：临近结清还大额+高违约金
+assert.ok(loan.calcPrepayment(350000, 13.14, 36, 34, 20000, 'term', 10).netSaved < 0)
+// 兼容：不传违约金参数 → penalty 0, netSaved = interestSaved
+;(function () {
+  const res = loan.calcPrepayment(350000, 13.14, 36, 12, 50000, 'term')
+  assert.strictEqual(res.penalty, 0)
+  closeTo(res.netSaved, res.interestSaved, 0.000001)
+})()
+
 console.log('loan calculator checks passed')

@@ -378,7 +378,7 @@ function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   return schedule
 }
 
-function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode) {
+function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode, penaltyPercent, penaltyAmount) {
   var base = calcEqualInstallment(principal, annualRatePercent, months)
   months = base.months
   paidMonths = Math.min(Math.max(0, Math.round(toNumber(paidMonths))), months)
@@ -395,6 +395,8 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
       newRemainingMonths: 0,
       oldMonthlyPayment: base.monthlyPayment,
       newMonthlyPayment: 0,
+      penalty: 0,
+      netSaved: 0,
       schedule: []
     }
   }
@@ -402,6 +404,10 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
   var paidRow = paidMonths > 0 ? base.schedule[paidMonths - 1] : null
   var remainingBalance = paidRow ? paidRow.balance : base.principal
   var afterPrepayBalance = Math.max(0, remainingBalance - prepayAmount)
+  var effectivePrepay = Math.min(prepayAmount, remainingBalance)
+  var penalty = nonNegative(penaltyAmount) > 0
+    ? nonNegative(penaltyAmount)
+    : effectivePrepay * nonNegative(penaltyPercent) / 100
   var oldRemainingInterest = base.schedule.slice(paidMonths).reduce(function (sum, row) {
     return sum + row.interest
   }, 0)
@@ -424,6 +430,8 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
     oldRemainingInterest: oldRemainingInterest,
     newRemainingInterest: newRemainingInterest,
     interestSaved: Math.max(0, oldRemainingInterest - newRemainingInterest),
+    penalty: penalty,
+    netSaved: Math.max(0, oldRemainingInterest - newRemainingInterest) - penalty,
     oldRemainingMonths: remainingMonths,
     newRemainingMonths: newSchedule.length,
     oldMonthlyPayment: base.monthlyPayment,
