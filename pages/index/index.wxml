@@ -19,11 +19,30 @@
   </view>
 
   <view wx:if="{{activeTool == 'payment'}}" class="panel">
-    <view class="field">
+    <view class="segmented two">
+      <text class="{{paymentForm.inputMode == 'loan' ? 'active' : ''}}" data-form="paymentForm" data-field="inputMode" data-value="loan" bindtap="setFormValue">填贷款额</text>
+      <text class="{{paymentForm.inputMode == 'price' ? 'active' : ''}}" data-form="paymentForm" data-field="inputMode" data-value="price" bindtap="setFormValue">{{loanType == 'car' ? '车价−首付' : '房价−首付'}}</text>
+    </view>
+    <view class="field" wx:if="{{paymentForm.inputMode == 'loan'}}">
       <text class="label">贷款本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款金额" type="digit" value="{{paymentForm.principal}}" data-form="paymentForm" data-field="principal" bindinput="onInput" />
       <text class="unit">{{paymentForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
+    <block wx:if="{{paymentForm.inputMode == 'price'}}">
+      <view class="field">
+        <text class="label">{{loanType == 'car' ? '车价' : '房价'}}</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="落地总价" type="digit" value="{{paymentForm.carPrice}}" data-form="paymentForm" data-field="carPrice" bindinput="onInput" />
+        <text class="unit">{{paymentForm.unit == 'wan' ? '万' : '元'}}</text>
+      </view>
+      <view class="quick-row">
+        <text wx:for="{{downRatioOptions}}" wx:key="*this" data-form="paymentForm" data-field="downRatio" data-value="{{item}}" bindtap="setFormValue">首付{{item}}%</text>
+      </view>
+      <view class="field">
+        <text class="label">首付{{paymentForm.downRatio ? paymentForm.downRatio + '%' : '金额'}}</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="自定义首付金额" type="digit" value="{{paymentForm.downPayment}}" data-form="paymentForm" data-field="downPayment" bindinput="onInput" />
+        <text class="unit">{{paymentForm.unit == 'wan' ? '万' : '元'}}</text>
+      </view>
+    </block>
     <view class="segmented two">
       <text class="{{paymentForm.unit == 'yuan' ? 'active' : ''}}" data-form="paymentForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
       <text class="{{paymentForm.unit == 'wan' ? 'active' : ''}}" data-form="paymentForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
@@ -52,6 +71,7 @@
     </view>
     <view class="result-grid">
       <view class="metric main"><text>{{paymentResult.primaryLabel}}</text><text>{{paymentResult.primaryPayment}}</text></view>
+      <view class="metric" wx:if="{{paymentForm.inputMode == 'price'}}"><text>贷款额</text><text>{{paymentResult.loanAmount}}</text></view>
       <view class="metric"><text>末期还款</text><text>{{paymentResult.lastPayment}}</text></view>
       <view class="metric"><text>总利息</text><text>{{paymentResult.totalInterest}}</text></view>
       <view class="metric"><text>还款总额</text><text>{{paymentResult.totalPayment}}</text></view>

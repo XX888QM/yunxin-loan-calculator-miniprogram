@@ -108,13 +108,18 @@ Page({
     termOptionList: TERM_OPTIONS.car,
     toolList: TOOL_OPTIONS.car,
     activeTool: 'payment',
+    downRatioOptions: ['20', '30', '40', '50'],
     paymentForm: {
       principal: '',
       months: '',
       annualRate: '',
       rateMode: 'annual',
       method: 'equalInstallment',
-      unit: 'yuan'
+      unit: 'yuan',
+      inputMode: 'loan',
+      carPrice: '',
+      downRatio: '',
+      downPayment: ''
     },
     comboForm: {
       commercialPrincipal: '',
@@ -189,18 +194,20 @@ Page({
   onInput(event) {
     const form = event.currentTarget.dataset.form
     const field = event.currentTarget.dataset.field
-    this.setData({
-      [`${form}.${field}`]: event.detail.value
-    }, () => this.recalculate())
+    const patch = { [`${form}.${field}`]: event.detail.value }
+    if (field === 'downPayment') patch[`${form}.downRatio`] = ''
+    if (field === 'balloonAmount') patch[`${form}.balloonRatio`] = ''
+    this.setData(patch, () => this.recalculate())
   },
 
   setFormValue(event) {
     const form = event.currentTarget.dataset.form
     const field = event.currentTarget.dataset.field
     const value = event.currentTarget.dataset.value
-    this.setData({
-      [`${form}.${field}`]: value
-    }, () => this.recalculate())
+    const patch = { [`${form}.${field}`]: value }
+    if (field === 'downRatio') patch[`${form}.downPayment`] = ''
+    if (field === 'balloonRatio') patch[`${form}.balloonAmount`] = ''
+    this.setData(patch, () => this.recalculate())
   },
 
   setMonths(event) {
@@ -274,12 +281,26 @@ Page({
 
   buildPaymentResult() {
     const form = this.data.paymentForm
+    let principal = amount(form.principal, form.unit)
+    let carPrice = 0
+    let downPayment = 0
+    if (form.inputMode === 'price') {
+      carPrice = amount(form.carPrice, form.unit)
+      downPayment = form.downRatio
+        ? carPrice * loan.toNumber(form.downRatio) / 100
+        : amount(form.downPayment, form.unit)
+      principal = Math.max(0, carPrice - downPayment)
+    }
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
-    const result = loan.calculateByMethod(amount(form.principal, form.unit), annualRate, form.months, form.method)
+    const result = loan.calculateByMethod(principal, annualRate, form.months, form.method)
     const primaryLabel = form.method === 'equalPrincipal' ? '首月月供' : '每月月供'
     const primaryPayment = form.method === 'equalPrincipal' ? result.firstPayment : result.monthlyPayment
+    const priceLines = form.inputMode === 'price'
+      ? [`车价：${money(carPrice)} 元`, `首付：${money(downPayment)} 元`]
+      : []
     const copyText = [
       ...this.loanContextLines(),
+      ...priceLines,
       `贷款本金：${money(result.principal)} 元`,
       `还款方式：${methodName(form.method)}`,
       rateText(form.annualRate, form.rateMode),
@@ -291,6 +312,7 @@ Page({
     return {
       primaryLabel,
       primaryPayment: money(primaryPayment),
+      loanAmount: money(result.principal),
       lastPayment: money(result.lastPayment),
       totalInterest: money(result.totalInterest),
       totalPayment: money(result.totalPayment),
