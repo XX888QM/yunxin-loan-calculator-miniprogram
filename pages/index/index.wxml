@@ -169,10 +169,24 @@
       <text class="{{actualForm.unit == 'yuan' ? 'active' : ''}}" data-form="actualForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
       <text class="{{actualForm.unit == 'wan' ? 'active' : ''}}" data-form="actualForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
-    <view class="field">
+    <view class="segmented two">
+      <text class="{{actualForm.inputMode == 'payment' ? 'active' : ''}}" data-form="actualForm" data-field="inputMode" data-value="payment" bindtap="setFormValue">知道月供</text>
+      <text class="{{actualForm.inputMode == 'interest' ? 'active' : ''}}" data-form="actualForm" data-field="inputMode" data-value="interest" bindtap="setFormValue">只知总利息</text>
+    </view>
+    <view class="field" wx:if="{{actualForm.inputMode == 'payment'}}">
       <text class="label">实际月供</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入银行给的月供" type="digit" value="{{actualForm.monthlyPayment}}" data-form="actualForm" data-field="monthlyPayment" bindinput="onInput" />
       <text class="unit">元</text>
+    </view>
+    <view class="field" wx:if="{{actualForm.inputMode == 'interest'}}">
+      <text class="label">总利息</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="整个贷款多付的利息" type="digit" value="{{actualForm.totalInterest}}" data-form="actualForm" data-field="totalInterest" bindinput="onInput" />
+      <text class="unit">{{actualForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="field">
+      <text class="label">前置费用</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="GPS费/服务费等，没有留空" type="digit" value="{{actualForm.upfrontFee}}" data-form="actualForm" data-field="upfrontFee" bindinput="onInput" />
+      <text class="unit">{{actualForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field">
       <text class="label">还款期数</text>
@@ -190,8 +204,10 @@
     </view>
     <view class="result-grid">
       <view class="metric main"><text>真实月利率</text><text>{{actualResult.monthlyRate}}</text></view>
+      <view class="metric"><text>含费月利率</text><text>{{actualResult.feeAdjustedMonthlyRate}}</text></view>
       <view class="metric"><text>名义年化</text><text>{{actualResult.annualNominalRate}}</text></view>
       <view class="metric"><text>复利年化</text><text>{{actualResult.annualEffectiveRate}}</text></view>
+      <view class="metric"><text>含费复利年化</text><text>{{actualResult.feeAdjustedAnnualEffectiveRate}}</text></view>
       <view class="metric"><text>口径倍数</text><text>{{actualResult.claimedMultiple}}</text></view>
       <view class="metric"><text>月息差</text><text>{{actualResult.claimedMonthlyGap}}</text></view>
       <view class="metric"><text>总利息</text><text>{{actualResult.totalInterest}}</text></view>

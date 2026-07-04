@@ -142,6 +142,9 @@ Page({
       principal: '',
       months: '',
       monthlyPayment: '',
+      totalInterest: '',
+      inputMode: 'payment',
+      upfrontFee: '',
       claimedMonthlyRate: '',
       claimedRateMode: 'monthly',
       unit: 'yuan'
@@ -383,16 +386,25 @@ Page({
 
   buildActualResult() {
     const form = this.data.actualForm
+    const principal = amount(form.principal, form.unit)
+    const upfrontFee = amount(form.upfrontFee, form.unit)
+    const months = Math.max(1, Math.round(loan.toNumber(form.months)))
+    const monthlyPayment = form.inputMode === 'interest'
+      ? (principal + amount(form.totalInterest, form.unit)) / months
+      : loan.toNumber(form.monthlyPayment)
     const claimedMonthlyRate = asMonthlyRatePercent(form.claimedMonthlyRate, form.claimedRateMode)
-    const result = loan.calcActualRate(amount(form.principal, form.unit), form.monthlyPayment, form.months, claimedMonthlyRate)
+    const result = loan.calcActualRate(principal, monthlyPayment, months, claimedMonthlyRate, upfrontFee)
     const copyText = [
       ...this.loanContextLines(),
       `本金：${money(result.principal)} 元`,
-      `月供：${money(result.monthlyPayment)} 元`,
+      `${form.inputMode === 'interest' ? '折算月供' : '月供'}：${money(result.monthlyPayment)} 元`,
+      `前置费用：${money(result.upfrontFee)} 元`,
       `对外${rateText(form.claimedMonthlyRate, form.claimedRateMode)}`,
       `真实月利率：${percent(result.monthlyRate, 4)}`,
+      `含费月利率：${percent(result.feeAdjustedMonthlyRate, 4)}`,
       `名义年化：${percent(result.annualNominalRate, 2)}`,
       `复利年化：${percent(result.annualEffectiveRate, 2)}`,
+      `含费复利年化：${percent(result.feeAdjustedAnnualEffectiveRate, 2)}`,
       `总利息：${money(result.totalInterest)} 元`
     ].join('\n')
 
@@ -400,6 +412,8 @@ Page({
       monthlyRate: percent(result.monthlyRate, 4),
       annualNominalRate: percent(result.annualNominalRate, 2),
       annualEffectiveRate: percent(result.annualEffectiveRate, 2),
+      feeAdjustedMonthlyRate: percent(result.feeAdjustedMonthlyRate, 4),
+      feeAdjustedAnnualEffectiveRate: percent(result.feeAdjustedAnnualEffectiveRate, 2),
       totalInterest: money(result.totalInterest),
       totalPayment: money(result.totalPayment),
       claimedMultiple: result.claimedMultiple ? loan.round(result.claimedMultiple, 2) + ' 倍' : '未填写',

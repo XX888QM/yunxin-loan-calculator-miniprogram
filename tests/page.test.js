@@ -115,6 +115,27 @@ assert.strictEqual(page.data.paymentForm.downPayment, '')
 page.onInput({ currentTarget: { dataset: { form: 'paymentForm', field: 'downPayment' } }, detail: { value: '50000' } })
 assert.strictEqual(page.data.paymentForm.downRatio, '')
 
+page.data.actualForm = {
+  principal: '350000',
+  months: '36',
+  monthlyPayment: '',
+  totalInterest: '75394',
+  inputMode: 'interest',
+  upfrontFee: '0',
+  claimedMonthlyRate: '0.59',
+  claimedRateMode: 'monthly',
+  unit: 'yuan'
+}
+const interestModeResult = page.buildActualResult()
+assert.strictEqual(interestModeResult.monthlyRate, '1.0950%')
+
+page.data.actualForm.inputMode = 'payment'
+page.data.actualForm.monthlyPayment = '11816.50'
+page.data.actualForm.upfrontFee = '10000'
+const feeResult = page.buildActualResult()
+assert.ok(parseFloat(feeResult.feeAdjustedMonthlyRate) > parseFloat(feeResult.monthlyRate))
+assert.ok(feeResult.copyText.includes('含费'))
+
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))
 
