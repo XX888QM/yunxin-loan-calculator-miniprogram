@@ -209,5 +209,9 @@ assert.strictEqual(page.buildPaymentResult().schedulePreview[0].label, '1')
 
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))
+assert.ok(wxml.includes('月份'))
+
+const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 'utf8')
+assert.ok(wxss.includes('grid-template-columns: 128rpx 176rpx 176rpx 176rpx 176rpx'))
 
 console.log('page checks passed')
