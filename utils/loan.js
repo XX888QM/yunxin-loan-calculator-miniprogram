@@ -4,7 +4,9 @@ var ZERO_RATE = 1e-10
 function toNumber(value, fallback) {
   if (fallback === undefined) fallback = 0
   if (value === null || value === undefined) return fallback
-  var n = Number(String(value).replace(/,/g, '').trim())
+  var s = String(value).replace(/,/g, '').trim()
+  if (s === '') return fallback
+  var n = Number(s)
   return Number.isFinite(n) ? n : fallback
 }
 
@@ -142,30 +144,31 @@ function calculateByMethod(principal, annualRatePercent, months, method) {
   return calcEqualInstallment(principal, annualRatePercent, months)
 }
 
-function presentValueOfPayment(monthlyPayment, months, monthlyRate) {
+function presentValueOfPayment(monthlyPayment, months, monthlyRate, balloon) {
   var pv = 0
   for (var i = 1; i <= months; i += 1) {
     pv += monthlyPayment / Math.pow(1 + monthlyRate, i)
   }
-  return pv
+  return pv + (balloon || 0) / Math.pow(1 + monthlyRate, months)
 }
 
-function inferMonthlyRateFromPayment(principal, monthlyPayment, months) {
+function inferMonthlyRateFromPayment(principal, monthlyPayment, months, balloon) {
   principal = nonNegative(principal)
   monthlyPayment = nonNegative(monthlyPayment)
+  balloon = nonNegative(balloon)
   months = normalizeMonths(months)
   if (principal <= 0 || monthlyPayment <= 0) return 0
-  if (monthlyPayment <= principal / months) return 0
+  if (monthlyPayment * months + balloon <= principal) return 0
 
   var low = 0
   var high = 0.02
-  while (presentValueOfPayment(monthlyPayment, months, high) > principal && high < 1) {
+  while (presentValueOfPayment(monthlyPayment, months, high, balloon) > principal && high < 1) {
     high *= 2
   }
 
   for (var i = 0; i < 80; i += 1) {
     var mid = (low + high) / 2
-    if (presentValueOfPayment(monthlyPayment, months, mid) > principal) {
+    if (presentValueOfPayment(monthlyPayment, months, mid, balloon) > principal) {
       low = mid
     } else {
       high = mid
@@ -175,11 +178,15 @@ function inferMonthlyRateFromPayment(principal, monthlyPayment, months) {
   return (low + high) / 2
 }
 
-function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePercent) {
+function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePercent, upfrontFee) {
   principal = nonNegative(principal)
   monthlyPayment = nonNegative(monthlyPayment)
   months = normalizeMonths(months)
+  upfrontFee = Math.min(nonNegative(upfrontFee), principal)
   var monthlyRate = inferMonthlyRateFromPayment(principal, monthlyPayment, months)
+  var feeAdjustedMonthlyRate = upfrontFee > 0
+    ? inferMonthlyRateFromPayment(principal - upfrontFee, monthlyPayment, months)
+    : monthlyRate
   var claimedMonthlyRate = nonNegative(claimedMonthlyRatePercent) / 100
   var totalPayment = monthlyPayment * months
   var totalInterest = Math.max(0, totalPayment - principal)
@@ -190,6 +197,10 @@ function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePer
     monthlyRate: monthlyRate,
     annualNominalRate: monthlyRate * 12,
     annualEffectiveRate: Math.pow(1 + monthlyRate, 12) - 1,
+    upfrontFee: upfrontFee,
+    feeAdjustedMonthlyRate: feeAdjustedMonthlyRate,
+    feeAdjustedAnnualNominalRate: feeAdjustedMonthlyRate * 12,
+    feeAdjustedAnnualEffectiveRate: Math.pow(1 + feeAdjustedMonthlyRate, 12) - 1,
     totalPayment: totalPayment,
     totalInterest: totalInterest,
     claimedMonthlyRate: claimedMonthlyRate,
@@ -263,6 +274,87 @@ function calcAffordableLoan(monthlyBudget, annualRatePercent, months, method) {
   return result
 }
 
+function calcBalloonLoan(principal, annualRatePercent, months, balloonAmount) {
+  principal = nonNegative(principal)
+  months = normalizeMonths(months)
+  var balloon = Math.min(nonNegative(balloonAmount), principal)
+  var r = monthlyRateFromAnnual(annualRatePercent)
+  var payment = isZeroRate(r)
+    ? (principal - balloon) / months
+    : (principal - balloon / Math.pow(1 + r, months)) * r / (1 - Math.pow(1 + r, -months))
+  var balance = principal
+  var schedule = []
+
+  for (var i = 1; i <= months; i += 1) {
+    var interest = balance * r
+    var principalPart = payment - interest
+    if (i === months) principalPart = balance
+    var rowPayment = principalPart + interest
+    balance = Math.max(0, balance - principalPart)
+    schedule.push({
+      month: i,
+      payment: rowPayment,
+      principal: principalPart,
+      interest: interest,
+      balance: balance
+    })
+  }
+
+  var result = baseResult(principal, annualRatePercent, months, 'balloon', schedule)
+  result.balloonAmount = balloon
+  result.monthlyPayment = payment
+  return result
+}
+
+function calcRentToOwn(carPrice, downPayment, monthlyRent, months, buyout) {
+  carPrice = nonNegative(carPrice)
+  downPayment = nonNegative(downPayment)
+  monthlyRent = nonNegative(monthlyRent)
+  buyout = nonNegative(buyout)
+  months = normalizeMonths(months)
+  var financed = Math.max(0, carPrice - downPayment)
+  var hasImpliedRate = financed > 0 && monthlyRent > 0
+  var impliedMonthlyRate = hasImpliedRate ? inferMonthlyRateFromPayment(financed, monthlyRent, months, buyout) : 0
+  var totalCost = downPayment + monthlyRent * months + buyout
+  return {
+    carPrice: carPrice,
+    downPayment: downPayment,
+    monthlyRent: monthlyRent,
+    months: months,
+    buyout: buyout,
+    totalCost: totalCost,
+    premiumOverCash: carPrice > 0 ? totalCost - carPrice : 0,
+    hasImpliedRate: hasImpliedRate,
+    impliedMonthlyRate: impliedMonthlyRate,
+    impliedAnnualNominalRate: impliedMonthlyRate * 12,
+    impliedAnnualEffectiveRate: Math.pow(1 + impliedMonthlyRate, 12) - 1
+  }
+}
+
+function calcRentPricing(carPrice, downPayment, months, buyout, targetAnnualRatePercent) {
+  carPrice = nonNegative(carPrice)
+  downPayment = nonNegative(downPayment)
+  buyout = nonNegative(buyout)
+  months = normalizeMonths(months)
+  var r = monthlyRateFromAnnual(targetAnnualRatePercent)
+  var financed = Math.max(0, carPrice - downPayment)
+  var rent = isZeroRate(r)
+    ? (financed - buyout) / months
+    : (financed - buyout / Math.pow(1 + r, months)) * r / (1 - Math.pow(1 + r, -months))
+  rent = Math.max(0, rent)
+  var totalCost = downPayment + rent * months + buyout
+  return {
+    carPrice: carPrice,
+    downPayment: downPayment,
+    months: months,
+    buyout: buyout,
+    targetAnnualRate: nonNegative(targetAnnualRatePercent),
+    monthlyRent: rent,
+    totalCost: totalCost,
+    premiumOverCash: carPrice > 0 ? totalCost - carPrice : 0
+  }
+}
+
 function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   var schedule = []
   var current = nonNegative(balance)
@@ -286,7 +378,7 @@ function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   return schedule
 }
 
-function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode) {
+function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode, penaltyPercent, penaltyAmount) {
   var base = calcEqualInstallment(principal, annualRatePercent, months)
   months = base.months
   paidMonths = Math.min(Math.max(0, Math.round(toNumber(paidMonths))), months)
@@ -303,6 +395,8 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
       newRemainingMonths: 0,
       oldMonthlyPayment: base.monthlyPayment,
       newMonthlyPayment: 0,
+      penalty: 0,
+      netSaved: 0,
       schedule: []
     }
   }
@@ -310,6 +404,10 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
   var paidRow = paidMonths > 0 ? base.schedule[paidMonths - 1] : null
   var remainingBalance = paidRow ? paidRow.balance : base.principal
   var afterPrepayBalance = Math.max(0, remainingBalance - prepayAmount)
+  var effectivePrepay = Math.min(prepayAmount, remainingBalance)
+  var penalty = nonNegative(penaltyAmount) > 0
+    ? nonNegative(penaltyAmount)
+    : effectivePrepay * nonNegative(penaltyPercent) / 100
   var oldRemainingInterest = base.schedule.slice(paidMonths).reduce(function (sum, row) {
     return sum + row.interest
   }, 0)
@@ -332,6 +430,8 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
     oldRemainingInterest: oldRemainingInterest,
     newRemainingInterest: newRemainingInterest,
     interestSaved: Math.max(0, oldRemainingInterest - newRemainingInterest),
+    penalty: penalty,
+    netSaved: Math.max(0, oldRemainingInterest - newRemainingInterest) - penalty,
     oldRemainingMonths: remainingMonths,
     newRemainingMonths: newSchedule.length,
     oldMonthlyPayment: base.monthlyPayment,
@@ -353,6 +453,9 @@ module.exports = {
   calcFlatMonthly: calcFlatMonthly,
   calcCompositeLoan: calcCompositeLoan,
   calcAffordableLoan: calcAffordableLoan,
+  calcBalloonLoan: calcBalloonLoan,
+  calcRentToOwn: calcRentToOwn,
+  calcRentPricing: calcRentPricing,
   calcPrepayment: calcPrepayment,
   inferMonthlyRateFromPayment: inferMonthlyRateFromPayment
 }

@@ -282,3 +282,7 @@
 .table-row:last-child {
   border-bottom: 0;
 }
+
+.metric text.negative {
+  color: #a8442e;
+}
