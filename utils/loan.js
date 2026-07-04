@@ -178,11 +178,15 @@ function inferMonthlyRateFromPayment(principal, monthlyPayment, months, balloon)
   return (low + high) / 2
 }
 
-function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePercent) {
+function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePercent, upfrontFee) {
   principal = nonNegative(principal)
   monthlyPayment = nonNegative(monthlyPayment)
   months = normalizeMonths(months)
+  upfrontFee = Math.min(nonNegative(upfrontFee), principal)
   var monthlyRate = inferMonthlyRateFromPayment(principal, monthlyPayment, months)
+  var feeAdjustedMonthlyRate = upfrontFee > 0
+    ? inferMonthlyRateFromPayment(principal - upfrontFee, monthlyPayment, months)
+    : monthlyRate
   var claimedMonthlyRate = nonNegative(claimedMonthlyRatePercent) / 100
   var totalPayment = monthlyPayment * months
   var totalInterest = Math.max(0, totalPayment - principal)
@@ -193,6 +197,10 @@ function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePer
     monthlyRate: monthlyRate,
     annualNominalRate: monthlyRate * 12,
     annualEffectiveRate: Math.pow(1 + monthlyRate, 12) - 1,
+    upfrontFee: upfrontFee,
+    feeAdjustedMonthlyRate: feeAdjustedMonthlyRate,
+    feeAdjustedAnnualNominalRate: feeAdjustedMonthlyRate * 12,
+    feeAdjustedAnnualEffectiveRate: Math.pow(1 + feeAdjustedMonthlyRate, 12) - 1,
     totalPayment: totalPayment,
     totalInterest: totalInterest,
     claimedMonthlyRate: claimedMonthlyRate,

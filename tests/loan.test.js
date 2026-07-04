@@ -123,4 +123,20 @@ closeTo(loan.calcRentPricing(120000, 20000, 20, 40000, 0).monthlyRent, 3000, 0.0
 // 尾款已覆盖融资额 → 月租 0
 assert.strictEqual(loan.calcRentPricing(100000, 20000, 12, 200000, 10).monthlyRent, 0)
 
+// fee=0：含费口径与名义口径一致（含 V1 兼容）
+;(function () {
+  const res = loan.calcActualRate(350000, 11816.5, 36, 0.59)
+  assert.strictEqual(res.feeAdjustedMonthlyRate, res.monthlyRate)
+  assert.strictEqual(res.upfrontFee, 0)
+})()
+// 收费 → 含费利率必然更高；且往返可还原
+;(function () {
+  const net = 340000, m = 36, r = 0.0125
+  const pay = net * r * Math.pow(1 + r, m) / (Math.pow(1 + r, m) - 1)
+  const res = loan.calcActualRate(350000, pay, m, 0, 10000)
+  closeTo(res.feeAdjustedMonthlyRate, r, 0.0000001)
+  assert.ok(res.feeAdjustedMonthlyRate > res.monthlyRate)
+  closeTo(res.totalInterest, pay * m - 350000, 0.01)
+})()
+
 console.log('loan calculator checks passed')
