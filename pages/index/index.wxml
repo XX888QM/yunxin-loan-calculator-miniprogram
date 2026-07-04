@@ -431,7 +431,7 @@
           <text class="schedule-pill">{{scheduleStartYm ? '首期 ' + scheduleStartYm : '设首期年月'}}</text>
         </picker>
         <text class="schedule-count">共 {{activeSchedulePreview.length}} 期</text>
-        <button wx:if="{{!pdfShareUnlocked}}" class="schedule-export" open-type="share">导出PDF</button>
+        <button wx:if="{{!pdfShareUnlocked}}" class="schedule-export" bindtap="openPdfSharePanel">导出PDF</button>
         <button wx:else class="schedule-export" bindtap="exportSchedulePdf">导出PDF</button>
       </view>
     </view>
@@ -449,5 +449,15 @@
         </view>
       </view>
     </scroll-view>
+  </view>
+
+  <view wx:if="{{showPdfSharePanel}}" class="share-mask" bindtap="closePdfSharePanel">
+    <view class="share-panel" catchtap="noop">
+      <text class="share-title">分享后导出PDF</text>
+      <text class="share-desc">选择一种分享方式，分享后即可导出还款明细。</text>
+      <button class="share-option primary" open-type="share">发给朋友</button>
+      <button class="share-option" bindtap="showTimelineShareTip">发朋友圈</button>
+      <button class="share-cancel" bindtap="closePdfSharePanel">取消</button>
+    </view>
   </view>
 </view>

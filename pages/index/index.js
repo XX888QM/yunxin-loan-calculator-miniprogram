@@ -218,7 +218,8 @@ Page({
     prepayResult: {},
     scheduleStartYm: '',
     activeSchedulePreview: [],
-    pdfShareUnlocked: false
+    pdfShareUnlocked: false,
+    showPdfSharePanel: false
   },
 
   onLoad() {
@@ -234,8 +235,11 @@ Page({
   },
 
   unlockPdfExport() {
-    if (this.data.pdfShareUnlocked) return
-    this.setData({ pdfShareUnlocked: true })
+    if (this.data.pdfShareUnlocked && !this.data.showPdfSharePanel) return
+    this.setData({
+      pdfShareUnlocked: true,
+      showPdfSharePanel: false
+    })
   },
 
   onShareAppMessage() {
@@ -333,6 +337,25 @@ Page({
     }
     wx.setClipboardData({
       data: summaries[activeTool] || ''
+    })
+  },
+
+  openPdfSharePanel() {
+    this.setData({ showPdfSharePanel: true })
+  },
+
+  closePdfSharePanel() {
+    this.setData({ showPdfSharePanel: false })
+  },
+
+  noop() {},
+
+  showTimelineShareTip() {
+    wx.showModal({
+      title: '分享到朋友圈',
+      content: '微信不支持按钮直接弹出朋友圈，请点右上角「···」选择分享到朋友圈。分享后即可导出PDF。',
+      confirmText: '知道了',
+      showCancel: false
     })
   },
 
