@@ -30,6 +30,11 @@ node --check utils/loan.js  # 语法检查
 - 分期表构造模式：逐月 `interest = balance * r`，末期 `principalPart = balance` 一把清零，保证本金合计精确、末期余额为 0。
 - **向后兼容铁律：给现有函数加参数必须可缺省，缺省时行为与旧版完全一致**（V1 测试断言一条不许改）。
 
+### utils/pdf.js — PDF 导出（零依赖）
+
+- 只生成还款明细 PDF，供页面写入本地临时文件后 `wx.openDocument` 打开。
+- 不引入第三方库、不上传数据；PDF 使用标准内置字体，正文表格保持 ASCII/数字，避免中文字体嵌入导致包体变大。
+
 ### pages/index/index.js — 单页多工具（ES6：const/箭头函数）
 
 - 每个工具一个 `build*Result()` 方法；`recalculate()` 全量重建所有结果，并按 `activeTool` 切换 `activeSchedulePreview`。

@@ -431,6 +431,7 @@
           <text class="schedule-pill">{{scheduleStartYm ? '首期 ' + scheduleStartYm : '设首期年月'}}</text>
         </picker>
         <text class="schedule-count">共 {{activeSchedulePreview.length}} 期</text>
+        <button class="schedule-export" bindtap="exportSchedulePdf">导出PDF</button>
       </view>
     </view>
     <scroll-view class="table-scroll" scroll-x>

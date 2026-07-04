@@ -3,7 +3,24 @@ const fs = require('fs')
 const path = require('path')
 
 let page
-global.wx = { setClipboardData() {} }
+let writtenFile
+let openedFile
+global.wx = {
+  env: { USER_DATA_PATH: '/tmp' },
+  setClipboardData() {},
+  getFileSystemManager() {
+    return {
+      writeFile(options) {
+        writtenFile = options
+        options.success()
+      }
+    }
+  },
+  openDocument(options) {
+    openedFile = options
+  },
+  showToast() {}
+}
 global.Page = function (config) {
   page = config
 }
@@ -204,12 +221,20 @@ page.data.paymentForm = {
 }
 const calRows = page.buildPaymentResult().schedulePreview
 assert.deepStrictEqual(calRows.map((row) => row.label), ['2026-11', '2026-12', '2027-01', '2027-02'])
+page.data.activeTool = 'payment'
+page.data.loanType = 'car'
+page.data.activeSchedulePreview = calRows
+page.exportSchedulePdf()
+assert.ok(writtenFile.filePath.endsWith('.pdf'))
+assert.ok(writtenFile.data instanceof ArrayBuffer)
+assert.strictEqual(openedFile.fileType, 'pdf')
 page.data.scheduleStartYm = ''
 assert.strictEqual(page.buildPaymentResult().schedulePreview[0].label, '1')
 
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))
 assert.ok(wxml.includes('月份'))
+assert.ok(wxml.includes('bindtap="exportSchedulePdf"'))
 
 const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 'utf8')
 assert.ok(wxss.includes('grid-template-columns: 128rpx 148rpx 148rpx 148rpx 148rpx'))

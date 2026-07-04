@@ -1,4 +1,5 @@
 const loan = require('../../utils/loan')
+const pdf = require('../../utils/pdf')
 
 function money(value) {
   return loan.formatMoney(value)
@@ -299,6 +300,40 @@ Page({
     }
     wx.setClipboardData({
       data: summaries[activeTool] || ''
+    })
+  },
+
+  exportSchedulePdf() {
+    const rows = this.data.activeSchedulePreview || []
+    if (!rows.length) {
+      wx.showToast({ title: '暂无明细', icon: 'none' })
+      return
+    }
+
+    const data = pdf.createSchedulePdf({
+      rows,
+      loanType: this.data.loanType,
+      tool: this.data.activeTool,
+      startMonth: this.data.scheduleStartYm || rows[0].label,
+      total: rows.length
+    })
+    const filePath = wx.env.USER_DATA_PATH + '/loan-schedule-' + Date.now() + '.pdf'
+    wx.getFileSystemManager().writeFile({
+      filePath,
+      data,
+      success: function () {
+        wx.openDocument({
+          filePath,
+          fileType: 'pdf',
+          showMenu: true,
+          fail: function () {
+            wx.showToast({ title: '打开PDF失败', icon: 'none' })
+          }
+        })
+      },
+      fail: function () {
+        wx.showToast({ title: '导出失败', icon: 'none' })
+      }
     })
   },
 

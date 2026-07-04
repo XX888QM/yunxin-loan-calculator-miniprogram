@@ -368,9 +368,11 @@
 }
 
 .schedule-pill,
-.schedule-count {
+.schedule-count,
+.schedule-export {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   height: 44rpx;
   padding: 0 14rpx;
   border-radius: 999rpx;
@@ -387,6 +389,18 @@
 .schedule-count {
   background: #f1f5f9;
   color: #475569;
+}
+
+.schedule-export {
+  margin: 0;
+  border: 0;
+  background: #1677ff;
+  color: #ffffff;
+  line-height: 44rpx;
+}
+
+.schedule-export::after {
+  border: 0;
 }
 
 .table-scroll {
