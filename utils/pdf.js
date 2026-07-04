@@ -43,12 +43,16 @@ function asciiLine(size, x, y, text) {
   return 'BT /F2 ' + size + ' Tf ' + x + ' ' + y + ' Td (' + escapePdfText(text) + ') Tj ET\n'
 }
 
+function compactAmount(value) {
+  return String(value === undefined || value === null ? '' : value).replace(/,/g, '')
+}
+
 function row(y, values) {
   return asciiLine(9, 40, y, values[0]) +
-    asciiLine(9, 122, y, values[1]) +
-    asciiLine(9, 222, y, values[2]) +
-    asciiLine(9, 322, y, values[3]) +
-    asciiLine(9, 422, y, values[4])
+    asciiLine(9, 122, y, compactAmount(values[1])) +
+    asciiLine(9, 222, y, compactAmount(values[2])) +
+    asciiLine(9, 322, y, compactAmount(values[3])) +
+    asciiLine(9, 422, y, compactAmount(values[4]))
 }
 
 function loanTypeLabel(value) {
