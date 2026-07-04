@@ -4,7 +4,9 @@ var ZERO_RATE = 1e-10
 function toNumber(value, fallback) {
   if (fallback === undefined) fallback = 0
   if (value === null || value === undefined) return fallback
-  var n = Number(String(value).replace(/,/g, '').trim())
+  var s = String(value).replace(/,/g, '').trim()
+  if (s === '') return fallback
+  var n = Number(s)
   return Number.isFinite(n) ? n : fallback
 }
 

@@ -55,4 +55,10 @@ closeTo(paidOff.remainingBalance, 0, 0.01)
 assert.strictEqual(paidOff.newRemainingMonths, 0)
 assert.strictEqual(paidOff.schedule.length, 0)
 
+assert.strictEqual(loan.toNumber('', 30), 30)
+assert.strictEqual(loan.toNumber('   ', 7), 7)
+assert.strictEqual(loan.toNumber(',', 5), 5)
+assert.strictEqual(loan.toNumber(''), 0)
+assert.strictEqual(loan.toNumber('1,234.5'), 1234.5)
+
 console.log('loan calculator checks passed')
