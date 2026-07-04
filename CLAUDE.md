@@ -33,7 +33,7 @@ node --check utils/loan.js  # 语法检查
 ### utils/pdf.js — PDF 导出（零依赖）
 
 - 只生成还款明细 PDF，供页面写入本地临时文件后 `wx.openDocument` 打开。
-- 不引入第三方库、不上传数据；PDF 使用标准内置字体，正文表格保持 ASCII/数字，避免中文字体嵌入导致包体变大。
+- 不引入第三方库、不上传数据；PDF 引用系统 CJK 字体 `STSong-Light`，中文以 UCS-2BE 十六进制写入，避免嵌入字体导致包体变大。
 
 ### pages/index/index.js — 单页多工具（ES6：const/箭头函数）
 
