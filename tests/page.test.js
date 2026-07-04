@@ -251,8 +251,11 @@ assert.ok(wxml.includes('月份'))
 assert.ok(wxml.includes('bindtap="exportSchedulePdf"'))
 assert.ok(wxml.includes('open-type="share"'))
 assert.ok(wxml.includes('>分享</button>'))
+assert.ok(wxml.includes('>导出</button>'))
 
 const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 'utf8')
 assert.ok(wxss.includes('grid-template-columns: 128rpx 148rpx 148rpx 148rpx 148rpx'))
+assert.ok(wxss.includes('width: 76rpx'))
+assert.ok(wxss.includes('width: 116rpx'))
 
 console.log('page checks passed')

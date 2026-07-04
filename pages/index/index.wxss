@@ -351,13 +351,12 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10rpx;
+  gap: 8rpx;
   flex-wrap: wrap;
 }
 
 .schedule-pill,
-.schedule-count,
-.schedule-export {
+.schedule-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -367,6 +366,21 @@
   white-space: nowrap;
   font-size: 22rpx;
   font-weight: 850;
+}
+
+.schedule-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999rpx;
+  white-space: nowrap;
+  font-size: 21rpx;
+  font-weight: 850;
+  line-height: 44rpx;
 }
 
 .schedule-pill {
@@ -379,20 +393,19 @@
   color: #475569;
 }
 
-.schedule-export {
-  margin: 0;
-  border: 0;
-  background: #1677ff;
-  color: #ffffff;
-  line-height: 44rpx;
-}
-
-.schedule-export.secondary {
+.schedule-action.share {
+  width: 76rpx;
   background: #eef6ff;
   color: #1677ff;
 }
 
-.schedule-export::after {
+.schedule-action.export {
+  width: 116rpx;
+  background: #1677ff;
+  color: #ffffff;
+}
+
+.schedule-action::after {
   border: 0;
 }
 
