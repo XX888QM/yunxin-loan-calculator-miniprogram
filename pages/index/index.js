@@ -8,12 +8,22 @@ function percent(value, digits) {
   return loan.formatPercent(value, digits || 2)
 }
 
-function schedulePreview(schedule) {
+function monthLabel(startYm, monthIndex) {
+  if (!startYm) return String(monthIndex)
+  const parts = startYm.split('-')
+  const total = Number(parts[0]) * 12 + (Number(parts[1]) - 1) + (monthIndex - 1)
+  const y = Math.floor(total / 12)
+  const m = (total % 12) + 1
+  return y + '-' + (m < 10 ? '0' + m : m)
+}
+
+function schedulePreview(schedule, startYm) {
   return schedule.filter(function (row) {
     return row.payment || row.principal || row.interest || row.balance
   }).map(function (row) {
     return {
       month: row.month,
+      label: monthLabel(startYm, row.month),
       payment: money(row.payment),
       principal: money(row.principal),
       interest: money(row.interest),
@@ -200,6 +210,7 @@ Page({
     balloonResult: {},
     rtoResult: {},
     prepayResult: {},
+    scheduleStartYm: '',
     activeSchedulePreview: []
   },
 
@@ -247,6 +258,10 @@ Page({
     this.setData({
       [`${form}.months`]: String(value)
     }, () => this.recalculate())
+  },
+
+  setScheduleStart(event) {
+    this.setData({ scheduleStartYm: event.detail.value }, () => this.recalculate())
   },
 
   setLoanType(event) {
@@ -355,7 +370,7 @@ Page({
       totalInterest: money(result.totalInterest),
       totalPayment: money(result.totalPayment),
       monthlyRate: percent(result.monthlyRate, 4),
-      schedulePreview: schedulePreview(result.schedule),
+      schedulePreview: schedulePreview(result.schedule, this.data.scheduleStartYm),
       copyText
     }
   },
@@ -388,7 +403,7 @@ Page({
       lastPayment: money(result.lastPayment),
       totalInterest: money(result.totalInterest),
       totalPayment: money(result.totalPayment),
-      schedulePreview: schedulePreview(result.schedule),
+      schedulePreview: schedulePreview(result.schedule, this.data.scheduleStartYm),
       copyText
     }
   },
@@ -414,7 +429,7 @@ Page({
       primaryPayment: money(primaryPayment),
       totalInterest: money(result.totalInterest),
       totalPayment: money(result.totalPayment),
-      schedulePreview: schedulePreview(result.schedule),
+      schedulePreview: schedulePreview(result.schedule, this.data.scheduleStartYm),
       copyText
     }
   },
@@ -510,7 +525,7 @@ Page({
       totalPayment: money(result.totalPayment),
       normalMonthly: money(normal.monthlyPayment),
       normalInterest: money(normal.totalInterest),
-      schedulePreview: schedulePreview(result.schedule),
+      schedulePreview: schedulePreview(result.schedule, this.data.scheduleStartYm),
       copyText
     }
   },
@@ -608,7 +623,7 @@ Page({
       newRemainingMonths: result.newRemainingMonths,
       oldMonthlyPayment: money(result.oldMonthlyPayment),
       newMonthlyPayment: money(result.newMonthlyPayment),
-      schedulePreview: schedulePreview(result.schedule),
+      schedulePreview: schedulePreview(result.schedule, this.data.scheduleStartYm),
       copyText
     }
   }

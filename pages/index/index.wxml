@@ -419,6 +419,9 @@
   <view class="schedule" wx:if="{{activeSchedulePreview.length}}">
     <view class="schedule-head">
       <text>还款明细</text>
+      <picker mode="date" fields="month" value="{{scheduleStartYm}}" bindchange="setScheduleStart">
+        <text>{{scheduleStartYm ? '首期 ' + scheduleStartYm : '设首期年月'}}</text>
+      </picker>
       <text>共 {{activeSchedulePreview.length}} 期</text>
     </view>
     <scroll-view class="table-scroll" scroll-x>
@@ -427,7 +430,7 @@
           <text>期</text><text>还款</text><text>本金</text><text>利息</text><text>余额</text>
         </view>
         <view class="table-row" wx:for="{{activeSchedulePreview}}" wx:key="month">
-          <text>{{item.month}}</text>
+          <text>{{item.label}}</text>
           <text>{{item.payment}}</text>
           <text>{{item.principal}}</text>
           <text>{{item.interest}}</text>

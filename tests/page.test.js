@@ -196,6 +196,17 @@ assert.ok(parseFloat(pricingRes.monthlyRent.replace(/,/g, '')) > 0)
 assert.ok(!pricingRes.copyText.includes('目标'))
 assert.ok(!pricingRes.copyText.includes('收益'))
 
+page.data.scheduleStartYm = '2026-11'
+page.data.paymentForm = {
+  principal: '120000', months: '4', annualRate: '0', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan',
+  inputMode: 'loan', carPrice: '', downRatio: '', downPayment: ''
+}
+const calRows = page.buildPaymentResult().schedulePreview
+assert.deepStrictEqual(calRows.map((row) => row.label), ['2026-11', '2026-12', '2027-01', '2027-02'])
+page.data.scheduleStartYm = ''
+assert.strictEqual(page.buildPaymentResult().schedulePreview[0].label, '1')
+
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))
 
