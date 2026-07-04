@@ -29,7 +29,7 @@ page.setData = function (patch, callback) {
 
 page.recalculate()
 assert.strictEqual(page.data.loanType, 'car')
-assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算', '尾款贷'])
+assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算', '尾款贷', '租购'])
 assert.deepStrictEqual(page.data.termOptionList.map((item) => item.label), ['12期', '24期', '36期', '48期', '60期'])
 assert.ok(page.data.paymentResult.copyText.includes('贷款类型：车贷'))
 
@@ -172,6 +172,29 @@ const balloonRes = page.buildBalloonResult()
 assert.ok(balloonRes.copyText.includes('尾款：80,000.00 元'))
 assert.ok(parseFloat(balloonRes.monthlyPayment.replace(/,/g, '')) < parseFloat(balloonRes.normalMonthly.replace(/,/g, '')))
 assert.ok(balloonRes.schedulePreview.length === 36)
+
+page.data.rtoForm = {
+  mode: 'analyze',
+  carPrice: '200000',
+  downPayment: '20000',
+  monthlyRent: '6200',
+  months: '36',
+  buyout: '50000',
+  bankAnnualRate: '7.08',
+  targetAnnualRate: '',
+  unit: 'yuan'
+}
+const rtoRes = page.buildRtoResult()
+assert.strictEqual(rtoRes.totalCost, '293,200.00')
+assert.ok(rtoRes.copyText.includes('隐含'))
+assert.ok(rtoRes.bankCompare !== '')
+
+page.data.rtoForm.mode = 'pricing'
+page.data.rtoForm.targetAnnualRate = '18'
+const pricingRes = page.buildRtoResult()
+assert.ok(parseFloat(pricingRes.monthlyRent.replace(/,/g, '')) > 0)
+assert.ok(!pricingRes.copyText.includes('目标'))
+assert.ok(!pricingRes.copyText.includes('收益'))
 
 const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(!wxml.includes('\u5398'))
