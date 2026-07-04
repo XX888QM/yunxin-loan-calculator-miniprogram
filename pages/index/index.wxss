@@ -166,18 +166,6 @@
   box-shadow: 0 14rpx 30rpx rgba(22, 119, 255, 0.22);
 }
 
-.tool.active::after {
-  content: "";
-  position: absolute;
-  left: 18rpx;
-  right: 18rpx;
-  bottom: 8rpx;
-  height: 3rpx;
-  border-radius: 3rpx;
-  background: #12c6aa;
-  animation: lineIn 260ms ease-out both;
-}
-
 .panel,
 .schedule {
   margin-top: 20rpx;
