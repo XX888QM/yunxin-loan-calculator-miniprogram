@@ -266,6 +266,38 @@ function calcAffordableLoan(monthlyBudget, annualRatePercent, months, method) {
   return result
 }
 
+function calcBalloonLoan(principal, annualRatePercent, months, balloonAmount) {
+  principal = nonNegative(principal)
+  months = normalizeMonths(months)
+  var balloon = Math.min(nonNegative(balloonAmount), principal)
+  var r = monthlyRateFromAnnual(annualRatePercent)
+  var payment = isZeroRate(r)
+    ? (principal - balloon) / months
+    : (principal - balloon / Math.pow(1 + r, months)) * r / (1 - Math.pow(1 + r, -months))
+  var balance = principal
+  var schedule = []
+
+  for (var i = 1; i <= months; i += 1) {
+    var interest = balance * r
+    var principalPart = payment - interest
+    if (i === months) principalPart = balance
+    var rowPayment = principalPart + interest
+    balance = Math.max(0, balance - principalPart)
+    schedule.push({
+      month: i,
+      payment: rowPayment,
+      principal: principalPart,
+      interest: interest,
+      balance: balance
+    })
+  }
+
+  var result = baseResult(principal, annualRatePercent, months, 'balloon', schedule)
+  result.balloonAmount = balloon
+  result.monthlyPayment = payment
+  return result
+}
+
 function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   var schedule = []
   var current = nonNegative(balance)
@@ -356,6 +388,7 @@ module.exports = {
   calcFlatMonthly: calcFlatMonthly,
   calcCompositeLoan: calcCompositeLoan,
   calcAffordableLoan: calcAffordableLoan,
+  calcBalloonLoan: calcBalloonLoan,
   calcPrepayment: calcPrepayment,
   inferMonthlyRateFromPayment: inferMonthlyRateFromPayment
 }

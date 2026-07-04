@@ -72,4 +72,23 @@ closeTo(loan.inferMonthlyRateFromPayment(350000, 11816.5, 36, 0), 0.01095, 0.000
 // 月供×期数+尾款 恰好等于本金 → 零利率
 assert.strictEqual(loan.inferMonthlyRateFromPayment(120000, 3000, 12, 84000), 0)
 
+;(function () {
+  const P = 200000, B = 80000, m = 36, r = 0.012
+  const res = loan.calcBalloonLoan(P, 14.4, m, B)
+  const pay = (P - B / Math.pow(1 + r, m)) * r / (1 - Math.pow(1 + r, -m))
+  closeTo(res.monthlyPayment, pay, 0.001)
+  closeTo(res.lastPayment, pay + B, 0.01)
+  closeTo(res.totalInterest, pay * m + B - P, 0.01)
+  closeTo(res.schedule[m - 1].balance, 0, 0.000001)
+  assert.strictEqual(res.balloonAmount, B)
+})()
+// 尾款为0 退化成等额本息
+closeTo(loan.calcBalloonLoan(350000, 13.14, 36, 0).monthlyPayment,
+  loan.calcEqualInstallment(350000, 13.14, 36).monthlyPayment, 0.000001)
+// 零利率
+closeTo(loan.calcBalloonLoan(120000, 0, 12, 60000).monthlyPayment, 5000, 0.000001)
+closeTo(loan.calcBalloonLoan(120000, 0, 12, 60000).lastPayment, 65000, 0.000001)
+// 尾款超本金 → 夹到本金，月供=纯利息
+closeTo(loan.calcBalloonLoan(100000, 12, 12, 999999).monthlyPayment, 1000, 0.01)
+
 console.log('loan calculator checks passed')
