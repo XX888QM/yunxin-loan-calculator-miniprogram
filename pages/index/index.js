@@ -217,9 +217,7 @@ Page({
     rtoResult: {},
     prepayResult: {},
     scheduleStartYm: '',
-    activeSchedulePreview: [],
-    pdfShareUnlocked: false,
-    showPdfSharePanel: false
+    activeSchedulePreview: []
   },
 
   onLoad() {
@@ -234,21 +232,11 @@ Page({
     })
   },
 
-  unlockPdfExport() {
-    if (this.data.pdfShareUnlocked && !this.data.showPdfSharePanel) return
-    this.setData({
-      pdfShareUnlocked: true,
-      showPdfSharePanel: false
-    })
-  },
-
   onShareAppMessage() {
-    this.unlockPdfExport()
     return SHARE_INFO
   },
 
   onShareTimeline() {
-    this.unlockPdfExport()
     return {
       title: SHARE_INFO.title,
       query: '',
@@ -340,36 +328,7 @@ Page({
     })
   },
 
-  openPdfSharePanel() {
-    this.setData({ showPdfSharePanel: true })
-  },
-
-  closePdfSharePanel() {
-    this.setData({ showPdfSharePanel: false })
-  },
-
-  noop() {},
-
-  showTimelineShareTip() {
-    wx.showModal({
-      title: '分享到朋友圈',
-      content: '微信不支持按钮直接弹出朋友圈，请点右上角「···」选择分享到朋友圈。分享后即可导出PDF。',
-      confirmText: '知道了',
-      showCancel: false
-    })
-  },
-
   exportSchedulePdf() {
-    if (!this.data.pdfShareUnlocked) {
-      wx.showModal({
-        title: '先分享再导出',
-        content: '请先点右上角「···」转发给朋友或分享到朋友圈，分享后即可导出PDF。',
-        confirmText: '知道了',
-        showCancel: false
-      })
-      return
-    }
-
     const rows = this.data.activeSchedulePreview || []
     if (!rows.length) {
       wx.showToast({ title: '暂无明细', icon: 'none' })
