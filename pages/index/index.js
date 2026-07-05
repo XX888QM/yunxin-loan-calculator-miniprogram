@@ -188,17 +188,6 @@ Page({
       balloonAmount: '',
       unit: 'yuan'
     },
-    rtoForm: {
-      mode: 'analyze',
-      carPrice: '',
-      downPayment: '',
-      monthlyRent: '',
-      months: '',
-      buyout: '',
-      bankAnnualRate: '',
-      targetAnnualRate: '',
-      unit: 'yuan'
-    },
     prepayForm: {
       principal: '',
       months: '',
@@ -218,7 +207,6 @@ Page({
     actualResult: {},
     flatResult: {},
     balloonResult: {},
-    rtoResult: {},
     prepayResult: {},
     scheduleStartYm: '',
     activeSchedulePreview: []
@@ -324,7 +312,6 @@ Page({
       actual: this.data.actualResult.copyText,
       flat: this.data.flatResult.copyText,
       balloon: this.data.balloonResult.copyText,
-      rto: this.data.rtoResult.copyText,
       prepay: this.data.prepayResult.copyText
     }
     wx.setClipboardData({
@@ -373,7 +360,6 @@ Page({
     const actualResult = this.buildActualResult()
     const flatResult = this.buildFlatResult()
     const balloonResult = this.buildBalloonResult()
-    const rtoResult = this.buildRtoResult()
     const prepayResult = this.buildPrepayResult()
     const schedules = {
       payment: paymentResult.schedulePreview,
@@ -390,7 +376,6 @@ Page({
       actualResult,
       flatResult,
       balloonResult,
-      rtoResult,
       prepayResult,
       activeSchedulePreview: schedules[this.data.activeTool] || []
     })
@@ -583,59 +568,6 @@ Page({
       normalMonthly: money(normal.monthlyPayment),
       normalInterest: money(normal.totalInterest),
       schedulePreview: schedulePreview(result.schedule, this.data.scheduleStartYm),
-      copyText
-    }
-  },
-
-  buildRtoResult() {
-    const form = this.data.rtoForm
-    const carPrice = amount(form.carPrice, form.unit)
-    const downPayment = amount(form.downPayment, form.unit)
-    const buyout = amount(form.buyout, form.unit)
-    const termMonths = normalizeMonths(form.months)
-
-    if (form.mode === 'pricing') {
-      const pricing = loan.calcRentPricing(carPrice, downPayment, termMonths, buyout, loan.toNumber(form.targetAnnualRate))
-      const copyText = this.loanContextLines().concat([
-        '租金方案',
-        `首付/保证金：${money(downPayment)} 元`,
-        `月租：${money(pricing.monthlyRent)} 元 × ${termMonths} 期`,
-        `期满尾款：${money(buyout)} 元`,
-        `总费用：${money(pricing.totalCost)} 元`
-      ]).join('\n')
-      return {
-        mode: 'pricing',
-        monthlyRent: money(pricing.monthlyRent),
-        totalCost: money(pricing.totalCost),
-        premiumOverCash: money(pricing.premiumOverCash),
-        copyText
-      }
-    }
-
-    const rto = loan.calcRentToOwn(carPrice, downPayment, loan.toNumber(form.monthlyRent), termMonths, buyout)
-    const bankRate = loan.toNumber(form.bankAnnualRate)
-    let bankCompare = ''
-    if (bankRate > 0 && carPrice > downPayment) {
-      const bank = loan.calcEqualInstallment(carPrice - downPayment, bankRate, termMonths)
-      bankCompare = money(rto.totalCost - (bank.totalPayment + downPayment))
-    }
-    const copyText = this.loanContextLines().concat([
-      '租金测算',
-      `首付/保证金：${money(downPayment)} 元，月租 ${money(rto.monthlyRent)} 元 × ${termMonths} 期，尾款 ${money(buyout)} 元`,
-      `总费用：${money(rto.totalCost)} 元`,
-      carPrice > 0 ? `比一次性买车多花：${money(rto.premiumOverCash)} 元` : '',
-      rto.hasImpliedRate ? `隐含月利率：${percent(rto.impliedMonthlyRate, 4)}，隐含复利年化：${percent(rto.impliedAnnualEffectiveRate, 2)}` : '',
-      bankCompare ? `比普通车贷多花：${bankCompare} 元` : ''
-    ]).filter(Boolean).join('\n')
-
-    return {
-      mode: 'analyze',
-      totalCost: money(rto.totalCost),
-      premiumOverCash: money(rto.premiumOverCash),
-      impliedMonthlyRate: percent(rto.impliedMonthlyRate, 4),
-      impliedAnnualNominalRate: percent(rto.impliedAnnualNominalRate, 2),
-      impliedAnnualEffectiveRate: percent(rto.impliedAnnualEffectiveRate, 2),
-      bankCompare,
       copyText
     }
   },

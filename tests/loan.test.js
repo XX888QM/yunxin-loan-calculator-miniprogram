@@ -93,38 +93,6 @@ closeTo(loan.calcBalloonLoan(120000, 0, 12, 60000).lastPayment, 65000, 0.000001)
 // 尾款超本金 → 夹到本金，月供=纯利息
 closeTo(loan.calcBalloonLoan(100000, 12, 12, 999999).monthlyPayment, 1000, 0.01)
 
-;(function () {
-  const price = 200000, down = 20000, B = 50000, m = 36, r = 0.015
-  const financed = price - down
-  const rent = (financed - B / Math.pow(1 + r, m)) * r / (1 - Math.pow(1 + r, -m))
-  const res = loan.calcRentToOwn(price, down, rent, m, B)
-  closeTo(res.impliedMonthlyRate, r, 0.0000001)
-  closeTo(res.totalCost, down + rent * m + B, 0.01)
-  closeTo(res.premiumOverCash, res.totalCost - price, 0.000001)
-  assert.strictEqual(res.hasImpliedRate, true)
-  closeTo(res.impliedAnnualEffectiveRate, Math.pow(1 + r, 12) - 1, 0.000001)
-})()
-// 车价缺省(0)：不算隐含利率、溢价为0，总费用照算
-;(function () {
-  const res = loan.calcRentToOwn(0, 10000, 3000, 24, 20000)
-  assert.strictEqual(res.hasImpliedRate, false)
-  assert.strictEqual(res.impliedMonthlyRate, 0)
-  assert.strictEqual(res.premiumOverCash, 0)
-  closeTo(res.totalCost, 10000 + 3000 * 24 + 20000, 0.01)
-})()
-
-// 定价 ↔ 测算 互为逆运算
-;(function () {
-  const pricing = loan.calcRentPricing(200000, 20000, 36, 50000, 18)
-  const back = loan.calcRentToOwn(200000, 20000, pricing.monthlyRent, 36, 50000)
-  closeTo(back.impliedAnnualNominalRate, 0.18, 0.000001)
-  closeTo(pricing.totalCost, 20000 + pricing.monthlyRent * 36 + 50000, 0.01)
-})()
-// 零利率：月租 = (融资额-尾款)/期数
-closeTo(loan.calcRentPricing(120000, 20000, 20, 40000, 0).monthlyRent, 3000, 0.000001)
-// 尾款已覆盖融资额 → 月租 0
-assert.strictEqual(loan.calcRentPricing(100000, 20000, 12, 200000, 10).monthlyRent, 0)
-
 // fee=0：含费口径与名义口径一致（含 V1 兼容）
 ;(function () {
   const res = loan.calcActualRate(350000, 11816.5, 36, 0.59)

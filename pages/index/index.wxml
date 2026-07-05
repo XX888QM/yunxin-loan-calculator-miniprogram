@@ -298,67 +298,6 @@
     </view>
   </view>
 
-  <view wx:if="{{activeTool == 'rto'}}" class="panel">
-    <view class="segmented two">
-      <text class="{{rtoForm.mode == 'analyze' ? 'active' : ''}}" data-form="rtoForm" data-field="mode" data-value="analyze" bindtap="setFormValue">方案测算</text>
-      <text class="{{rtoForm.mode == 'pricing' ? 'active' : ''}}" data-form="rtoForm" data-field="mode" data-value="pricing" bindtap="setFormValue">定价反推</text>
-    </view>
-    <view class="field">
-      <text class="label">车价{{rtoForm.mode == 'analyze' ? '(选填)' : ''}}</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="{{rtoForm.mode == 'analyze' ? '填了才算隐含年化' : '车辆成本价'}}" type="digit" value="{{rtoForm.carPrice}}" data-form="rtoForm" data-field="carPrice" bindinput="onInput" />
-      <text class="unit">{{rtoForm.unit == 'wan' ? '万' : '元'}}</text>
-    </view>
-    <view class="segmented two">
-      <text class="{{rtoForm.unit == 'yuan' ? 'active' : ''}}" data-form="rtoForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
-      <text class="{{rtoForm.unit == 'wan' ? 'active' : ''}}" data-form="rtoForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
-    </view>
-    <view class="field">
-      <text class="label">首付/保证金</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="没有填0或留空" type="digit" value="{{rtoForm.downPayment}}" data-form="rtoForm" data-field="downPayment" bindinput="onInput" />
-      <text class="unit">{{rtoForm.unit == 'wan' ? '万' : '元'}}</text>
-    </view>
-    <view class="field" wx:if="{{rtoForm.mode == 'analyze'}}">
-      <text class="label">月租金</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="每月租金" type="digit" value="{{rtoForm.monthlyRent}}" data-form="rtoForm" data-field="monthlyRent" bindinput="onInput" />
-      <text class="unit">元</text>
-    </view>
-    <view class="field">
-      <text class="label">租期</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="多少期" type="number" value="{{rtoForm.months}}" data-form="rtoForm" data-field="months" bindinput="onInput" />
-      <text class="unit">期</text>
-    </view>
-    <view class="quick-row">
-      <text wx:for="{{termOptionList}}" wx:key="value" data-form="rtoForm" data-value="{{item.value}}" bindtap="setMonths">{{item.label}}</text>
-    </view>
-    <view class="field">
-      <text class="label">期满尾款</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="期满过户尾款，没有填0" type="digit" value="{{rtoForm.buyout}}" data-form="rtoForm" data-field="buyout" bindinput="onInput" />
-      <text class="unit">{{rtoForm.unit == 'wan' ? '万' : '元'}}</text>
-    </view>
-    <view class="field" wx:if="{{rtoForm.mode == 'analyze'}}">
-      <text class="label">对比年化(选填)</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="填了对比普通车贷" type="digit" value="{{rtoForm.bankAnnualRate}}" data-form="rtoForm" data-field="bankAnnualRate" bindinput="onInput" />
-      <text class="unit">%</text>
-    </view>
-    <view class="field" wx:if="{{rtoForm.mode == 'pricing'}}">
-      <text class="label">参考年化</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="用于反推月租" type="digit" value="{{rtoForm.targetAnnualRate}}" data-form="rtoForm" data-field="targetAnnualRate" bindinput="onInput" />
-      <text class="unit">%</text>
-    </view>
-    <view class="result-grid" wx:if="{{rtoResult.mode == 'analyze'}}">
-      <view class="metric main"><text>总费用</text><text>{{rtoResult.totalCost}}</text></view>
-      <view class="metric"><text>比全款多花</text><text>{{rtoResult.premiumOverCash}}</text></view>
-      <view class="metric"><text>隐含月利率</text><text>{{rtoResult.impliedMonthlyRate}}</text></view>
-      <view class="metric"><text>隐含复利年化</text><text>{{rtoResult.impliedAnnualEffectiveRate}}</text></view>
-      <view class="metric" wx:if="{{rtoResult.bankCompare}}"><text>比普通车贷多花</text><text>{{rtoResult.bankCompare}}</text></view>
-    </view>
-    <view class="result-grid" wx:if="{{rtoResult.mode == 'pricing'}}">
-      <view class="metric main"><text>月租定价</text><text>{{rtoResult.monthlyRent}}</text></view>
-      <view class="metric"><text>客户总费用</text><text>{{rtoResult.totalCost}}</text></view>
-      <view class="metric"><text>比全款多花</text><text>{{rtoResult.premiumOverCash}}</text></view>
-    </view>
-  </view>
-
   <view wx:if="{{activeTool == 'prepay'}}" class="panel">
     <view class="field">
       <text class="label">贷款本金</text>

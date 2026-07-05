@@ -200,29 +200,6 @@ assert.ok(balloonRes.copyText.includes('尾款：80,000.00 元'))
 assert.ok(parseFloat(balloonRes.monthlyPayment.replace(/,/g, '')) < parseFloat(balloonRes.normalMonthly.replace(/,/g, '')))
 assert.ok(balloonRes.schedulePreview.length === 36)
 
-page.data.rtoForm = {
-  mode: 'analyze',
-  carPrice: '200000',
-  downPayment: '20000',
-  monthlyRent: '6200',
-  months: '36',
-  buyout: '50000',
-  bankAnnualRate: '7.08',
-  targetAnnualRate: '',
-  unit: 'yuan'
-}
-const rtoRes = page.buildRtoResult()
-assert.strictEqual(rtoRes.totalCost, '293,200.00')
-assert.ok(rtoRes.copyText.includes('隐含'))
-assert.ok(rtoRes.bankCompare !== '')
-
-page.data.rtoForm.mode = 'pricing'
-page.data.rtoForm.targetAnnualRate = '18'
-const pricingRes = page.buildRtoResult()
-assert.ok(parseFloat(pricingRes.monthlyRent.replace(/,/g, '')) > 0)
-assert.ok(!pricingRes.copyText.includes('目标'))
-assert.ok(!pricingRes.copyText.includes('收益'))
-
 page.data.scheduleStartYm = '2026-11'
 page.data.paymentForm = {
   principal: '120000', months: '4', annualRate: '0', rateMode: 'annual',

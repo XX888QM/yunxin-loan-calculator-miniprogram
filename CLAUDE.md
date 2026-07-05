@@ -41,7 +41,7 @@ node --check utils/loan.js  # 语法检查
 - 每个工具一个 `build*Result()` 方法；`recalculate()` 全量重建所有结果，并按 `activeTool` 切换 `activeSchedulePreview`。
 - 首页定义 `onShareAppMessage` / `onShareTimeline` 并在 `onLoad` 调 `wx.showShareMenu`；还款明细区的分享按钮是自愿转发入口，PDF 导出不依赖分享状态。
 - 表单全存 `data.xxxForm`；事件只有三个通用 handler（`onInput`/`setFormValue`/`setMonths`），由 WXML 的 `data-form`/`data-field`/`data-value` 驱动。成对字段的互斥清空写在 handler 里（`downRatio`↔`downPayment`、`balloonRatio`↔`balloonAmount`）。
-- **万/元换算只发生在页面层**：`amount(value, unit)`（unit==='wan' 时 ×10000），引擎永远收元；月供/月租/月供预算类字段永远按元、不参与换算。
+- **万/元换算只发生在页面层**：`amount(value, unit)`（unit==='wan' 时 ×10000），引擎永远收元；月供/月供预算类字段永远按元、不参与换算。
 - 工具导航按贷款类型过滤：`TOOL_OPTIONS.car`（含尾款贷 balloon）、`TOOL_OPTIONS.home`（含组合贷 combo、能贷多少 budget、提前还款 prepay）；快捷期数同理走 `TERM_OPTIONS`。
 
 ### WXML/WXSS
@@ -54,15 +54,14 @@ node --check utils/loan.js  # 语法检查
 ## 测试约定
 
 - `page.test.js` mock 全局 `Page`/`wx` 后 require 页面文件，直接调 `build*` 方法断言；它还读取 index.wxml 做文案断言。
-- 数值断言优先用**独立闭式公式**交叉验证（测试里自己写年金公式，不复用引擎内部函数）；互逆运算写闭环测试（如 `calcRentPricing` ↔ `calcRentToOwn` 往返还原利率）。
+- 数值断言优先用**独立闭式公式**交叉验证（测试里自己写年金公式，不复用引擎内部函数）。
 - 本仓库全程 TDD：改公式先写失败测试，再改实现。
 
 ## 合规红线（测试有锁，不可违反）
 
-- 发布版不在车贷工具入口展示租购；租购"定价反推"的复制文案**不得出现"目标""收益"字样**（page.test.js 断言）——定价是对内工具，对外文案只给方案本身。
 - WXML 不得出现"厘"字（page.test.js 断言，历史上删除过"月息厘"模式）。
 - 页面文案不点名任何银行/机构，用"真实资金成本/宣称口径/反推年化"等中性词（详见 docs/开发文档.md §11）。
-- 上线类目走"工具"类；"租购"Tab 涉及汽车融资租赁资质问题，公开发布版默认隐藏入口。
+- 上线类目走"工具"类；公开发布版不包含汽车融资租赁相关测算入口和源码。
 
 ## 文档同步
 
