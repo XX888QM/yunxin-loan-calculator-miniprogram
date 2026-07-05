@@ -48,8 +48,8 @@ node --check utils/loan.js  # 语法检查
 
 - 复用固定类名体系：`field/label/input/unit`、`segmented(.two)`、`quick-row`、`result-grid/metric(.main)`、`panel`。新面板照抄现有结构，不引入新样式体系。
 - 品牌资源放在 `assets/`；顶部 logo 使用 `assets/logo.png`，保持小图资源低于微信代码质量建议的 200K。
-- 公开仓库的 `project.config.json` 使用 `touristappid`；真实 AppID 只放本地未提交的 `project.private.config.json`。
-- 发布包通过 `project.config.json` 的 `packOptions.ignore` 排除 docs/tests/README/CLAUDE/package.json 这类开发资料。
+- 公开仓库的 `project.config.json` 使用 `touristappid`；真实 AppID 只放本地未提交、且上传包忽略的 `project.private.config.json`。
+- 发布包通过 `project.config.json` 的 `packOptions.ignore` 排除文档、测试、npm 文件、私有配置、Git 文件和其他开发资料；`uploadWithSourceMap` 保持关闭。
 
 ## 测试约定
 

@@ -11,7 +11,7 @@
     "enhance": true,
     "compileWorklet": false,
     "uglifyFileName": false,
-    "uploadWithSourceMap": true,
+    "uploadWithSourceMap": false,
     "packNpmManually": false,
     "packNpmRelationList": [],
     "minifyWXSS": true,
@@ -51,6 +51,34 @@
       {
         "type": "file",
         "value": "package.json"
+      },
+      {
+        "type": "file",
+        "value": "project.private.config.json"
+      },
+      {
+        "type": "file",
+        "value": "project.config.json"
+      },
+      {
+        "type": "file",
+        "value": "LICENSE"
+      },
+      {
+        "type": "file",
+        "value": ".gitignore"
+      },
+      {
+        "type": "file",
+        "value": ".DS_Store"
+      },
+      {
+        "type": "folder",
+        "value": ".git"
+      },
+      {
+        "type": "folder",
+        "value": "node_modules"
       }
     ],
     "include": []
