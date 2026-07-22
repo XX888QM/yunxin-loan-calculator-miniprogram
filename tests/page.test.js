@@ -153,7 +153,8 @@ assert.strictEqual(interestModeResult.monthlyRate, '1.0950%')
 
 page.data.actualForm.months = '9999'
 const cappedInterestMode = page.buildActualResult()
-assert.strictEqual(cappedInterestMode.totalPayment, '425,394.00')
+assert.strictEqual(cappedInterestMode.valid, false)
+assert.ok(cappedInterestMode.error.includes('600'))
 
 page.data.actualForm.inputMode = 'payment'
 page.data.actualForm.months = '36'
@@ -239,5 +240,220 @@ const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 
 assert.ok(wxss.includes('grid-template-columns: 128rpx 148rpx 148rpx 148rpx 148rpx'))
 assert.ok(wxss.includes('width: 76rpx'))
 assert.ok(wxss.includes('width: 132rpx'))
+
+
+
+// ---- 准确性加固回归测试 ----
+page.data.activeTool = 'payment'
+page.data.loanType = 'car'
+page.data.paymentForm = {
+  principal: '350000', months: '36', annualRate: '7.08', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan', inputMode: 'loan',
+  carPrice: '', downRatio: '', downPayment: ''
+}
+const paymentBeforeUnitSwitch = page.buildPaymentResult()
+page.setFormValue({ currentTarget: { dataset: { form: 'paymentForm', field: 'unit', value: 'wan' } } })
+assert.strictEqual(page.data.paymentForm.principal, '35')
+assert.strictEqual(page.buildPaymentResult().primaryPayment, paymentBeforeUnitSwitch.primaryPayment)
+page.setFormValue({ currentTarget: { dataset: { form: 'paymentForm', field: 'unit', value: 'yuan' } } })
+assert.strictEqual(page.data.paymentForm.principal, '350000')
+assert.strictEqual(page.buildPaymentResult().totalPayment, paymentBeforeUnitSwitch.totalPayment)
+
+// 贷款类型切换也不能重新解释已有金额
+page.data.paymentForm.principal = '350000'
+page.data.paymentForm.unit = 'yuan'
+page.setLoanType({ currentTarget: { dataset: { value: 'home' } } })
+assert.strictEqual(page.data.paymentForm.unit, 'wan')
+assert.strictEqual(page.data.paymentForm.principal, '35')
+page.setLoanType({ currentTarget: { dataset: { value: 'car' } } })
+assert.strictEqual(page.data.paymentForm.unit, 'yuan')
+assert.strictEqual(page.data.paymentForm.principal, '350000')
+
+// 必填项为空时不得暗中按1期或30年计算
+page.data.paymentForm = {
+  principal: '350000', months: '', annualRate: '7.08', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan', inputMode: 'loan',
+  carPrice: '', downRatio: '', downPayment: ''
+}
+const invalidPayment = page.buildPaymentResult()
+assert.strictEqual(invalidPayment.valid, false)
+assert.strictEqual(invalidPayment.primaryPayment, '—')
+assert.strictEqual(invalidPayment.schedulePreview.length, 0)
+
+page.data.comboForm = {
+  commercialPrincipal: '100', commercialRate: '3.45', fundPrincipal: '50', fundRate: '2.85',
+  years: '', rateMode: 'annual', method: 'equalInstallment', unit: 'wan'
+}
+assert.strictEqual(page.buildComboResult().valid, false)
+
+// 尾款现金流应能在查真利率中往返回原利率
+;(function () {
+  const P = 200000, B = 80000, m = 36, r = 0.012
+  const pay = (P - B / Math.pow(1 + r, m)) * r / (1 - Math.pow(1 + r, -m))
+  page.data.actualForm = {
+    principal: String(P), months: String(m), monthlyPayment: String(pay), totalInterest: '',
+    inputMode: 'payment', paymentStructure: 'balloon', balloonAmount: String(B),
+    upfrontFee: '', claimedMonthlyRate: '', claimedRateMode: 'monthly', unit: 'yuan'
+  }
+  const result = page.buildActualResult()
+  assert.strictEqual(result.valid, true)
+  assert.strictEqual(result.monthlyRate, '1.2000%')
+})()
+
+page.data.actualForm.upfrontFee = '200000'
+const invalidFee = page.buildActualResult()
+assert.strictEqual(invalidFee.valid, false)
+assert.ok(invalidFee.error.includes('前置费用'))
+
+// 提前还款支持等额本金与当前剩余本金
+page.data.prepayForm = {
+  principal: '100', months: '360', annualRate: '3.1', rateMode: 'annual',
+  paidMonths: '120', prepayAmount: '10', reduceMode: 'payment',
+  method: 'equalPrincipal', currentBalance: '',
+  penaltyMode: 'percent', penaltyPercent: '', penaltyAmount: '', unit: 'wan'
+}
+const equalPrincipalPrepay = page.buildPrepayResult()
+assert.strictEqual(equalPrincipalPrepay.valid, true)
+assert.strictEqual(equalPrincipalPrepay.remainingBalance, '666,666.67')
+page.data.prepayForm.currentBalance = '70'
+assert.strictEqual(page.buildPrepayResult().remainingBalance, '700,000.00')
+
+
+// 其他表单的万元/元切换也必须保持实际金额
+page.data.comboForm = {
+  commercialPrincipal: '100', commercialRate: '3.45', fundPrincipal: '50', fundRate: '2.85',
+  years: '30', rateMode: 'annual', method: 'equalInstallment', unit: 'wan'
+}
+page.setFormValue({ currentTarget: { dataset: { form: 'comboForm', field: 'unit', value: 'yuan' } } })
+assert.strictEqual(page.data.comboForm.commercialPrincipal, '1000000')
+assert.strictEqual(page.data.comboForm.fundPrincipal, '500000')
+
+page.data.actualForm = {
+  principal: '35', months: '36', monthlyPayment: '11816.5', totalInterest: '7.5394',
+  inputMode: 'payment', paymentStructure: 'balloon', balloonAmount: '8',
+  upfrontFee: '1', claimedMonthlyRate: '', claimedRateMode: 'monthly', unit: 'wan'
+}
+page.setFormValue({ currentTarget: { dataset: { form: 'actualForm', field: 'unit', value: 'yuan' } } })
+assert.strictEqual(page.data.actualForm.principal, '350000')
+assert.strictEqual(page.data.actualForm.totalInterest, '75394')
+assert.strictEqual(page.data.actualForm.balloonAmount, '80000')
+assert.strictEqual(page.data.actualForm.upfrontFee, '10000')
+assert.strictEqual(page.data.actualForm.monthlyPayment, '11816.5')
+
+page.data.flatForm = { principal: '35', months: '36', monthlyFlatRate: '0.59', rateMode: 'monthly', unit: 'wan' }
+page.setFormValue({ currentTarget: { dataset: { form: 'flatForm', field: 'unit', value: 'yuan' } } })
+assert.strictEqual(page.data.flatForm.principal, '350000')
+
+page.data.balloonForm = {
+  principal: '20', months: '36', annualRate: '14.4', rateMode: 'annual',
+  balloonRatio: '', balloonAmount: '8', unit: 'wan'
+}
+page.setFormValue({ currentTarget: { dataset: { form: 'balloonForm', field: 'unit', value: 'yuan' } } })
+assert.strictEqual(page.data.balloonForm.principal, '200000')
+assert.strictEqual(page.data.balloonForm.balloonAmount, '80000')
+
+page.data.prepayForm = {
+  principal: '100', months: '360', annualRate: '3.1', rateMode: 'annual', paidMonths: '120',
+  prepayAmount: '10', method: 'equalPrincipal', currentBalance: '70', reduceMode: 'payment',
+  penaltyMode: 'amount', penaltyPercent: '', penaltyAmount: '1', unit: 'wan'
+}
+page.setFormValue({ currentTarget: { dataset: { form: 'prepayForm', field: 'unit', value: 'yuan' } } })
+assert.strictEqual(page.data.prepayForm.principal, '1000000')
+assert.strictEqual(page.data.prepayForm.prepayAmount, '100000')
+assert.strictEqual(page.data.prepayForm.currentBalance, '700000')
+assert.strictEqual(page.data.prepayForm.penaltyAmount, '10000')
+
+// 先息后本现金流和无根现金流应正确区分
+page.data.actualForm = {
+  principal: '120000', months: '12', monthlyPayment: '1200', totalInterest: '',
+  inputMode: 'payment', paymentStructure: 'interestOnly', balloonAmount: '',
+  upfrontFee: '', claimedMonthlyRate: '', claimedRateMode: 'monthly', unit: 'yuan'
+}
+const interestOnlyRate = page.buildActualResult()
+assert.strictEqual(interestOnlyRate.valid, true)
+assert.strictEqual(interestOnlyRate.monthlyRate, '1.0000%')
+assert.strictEqual(interestOnlyRate.claimedMonthlyGap, '未填写')
+
+page.data.actualForm.paymentStructure = 'equalPayment'
+page.data.actualForm.monthlyPayment = '1000'
+const insufficientRate = page.buildActualResult()
+assert.strictEqual(insufficientRate.valid, false)
+assert.ok(insufficientRate.error.includes('现金流不足'))
+
+// 零利率是合法输入；首付和尾款超限必须报错
+page.data.paymentForm = {
+  principal: '120000', months: '12', annualRate: '0', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan', inputMode: 'loan',
+  carPrice: '', downRatio: '', downPayment: ''
+}
+assert.strictEqual(page.buildPaymentResult().valid, true)
+assert.strictEqual(page.buildPaymentResult().primaryPayment, '10,000.00')
+
+page.data.paymentForm = {
+  principal: '', months: '36', annualRate: '7.08', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan', inputMode: 'price',
+  carPrice: '200000', downRatio: '', downPayment: '210000'
+}
+assert.strictEqual(page.buildPaymentResult().valid, false)
+assert.ok(page.buildPaymentResult().error.includes('首付'))
+
+page.data.balloonForm = {
+  principal: '200000', months: '36', annualRate: '14.4', rateMode: 'annual',
+  balloonRatio: '', balloonAmount: '210000', unit: 'yuan'
+}
+assert.strictEqual(page.buildBalloonResult().valid, false)
+assert.ok(page.buildBalloonResult().error.includes('尾款'))
+
+
+// 页面显示的明细合计必须与结果区汇总完全一致
+page.data.activeTool = 'payment'
+page.data.loanType = 'home'
+page.data.paymentForm = {
+  principal: '100', months: '360', annualRate: '3.1', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'wan', inputMode: 'loan',
+  carPrice: '', downRatio: '', downPayment: ''
+}
+const centAccuratePayment = page.buildPaymentResult()
+function displayedCents(value) {
+  return Math.round(Number(String(value).replace(/,/g, '')) * 100)
+}
+assert.strictEqual(
+  centAccuratePayment.schedulePreview.reduce((sum, row) => sum + displayedCents(row.payment), 0),
+  displayedCents(centAccuratePayment.totalPayment)
+)
+assert.strictEqual(
+  centAccuratePayment.schedulePreview.reduce((sum, row) => sum + displayedCents(row.principal), 0),
+  displayedCents(centAccuratePayment.loanAmount)
+)
+assert.strictEqual(
+  centAccuratePayment.schedulePreview.reduce((sum, row) => sum + displayedCents(row.interest), 0),
+  displayedCents(centAccuratePayment.totalInterest)
+)
+
+// 实时输入只重算当前工具，避免反复构造所有长期明细
+;(function () {
+  const builderNames = [
+    'buildPaymentResult', 'buildComboResult', 'buildBudgetResult',
+    'buildActualResult', 'buildFlatResult', 'buildBalloonResult', 'buildPrepayResult'
+  ]
+  const originals = {}
+  const calls = []
+  builderNames.forEach((name) => {
+    originals[name] = page[name]
+    page[name] = function () {
+      calls.push(name)
+      return { valid: true, error: '', schedulePreview: [], copyText: '' }
+    }
+  })
+  page.data.activeTool = 'flat'
+  page.recalculate()
+  assert.deepStrictEqual(calls, ['buildFlatResult'])
+  builderNames.forEach((name) => { page[name] = originals[name] })
+})()
+
+const latestWxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
+assert.ok(latestWxml.includes('月利率%'))
+assert.ok(latestWxml.includes('名义年化'))
+assert.ok(latestWxml.includes('当前剩余本金'))
 
 console.log('page checks passed')

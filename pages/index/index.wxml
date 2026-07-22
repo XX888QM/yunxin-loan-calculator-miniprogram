@@ -38,7 +38,7 @@
     <block wx:if="{{paymentForm.inputMode == 'price'}}">
       <view class="field">
         <text class="label">{{loanType == 'car' ? '车价' : '房价'}}</text>
-        <input class="input" placeholder-class="input-placeholder" placeholder="落地总价" type="digit" value="{{paymentForm.carPrice}}" data-form="paymentForm" data-field="carPrice" bindinput="onInput" />
+        <input class="input" placeholder-class="input-placeholder" placeholder="输入总价" type="digit" value="{{paymentForm.carPrice}}" data-form="paymentForm" data-field="carPrice" bindinput="onInput" />
         <text class="unit">{{paymentForm.unit == 'wan' ? '万' : '元'}}</text>
       </view>
       <view class="quick-row">
@@ -63,19 +63,21 @@
       <text wx:for="{{termOptionList}}" wx:key="value" data-form="paymentForm" data-value="{{item.value}}" bindtap="setMonths">{{item.label}}</text>
     </view>
     <view class="field">
-      <text class="label">{{paymentForm.rateMode == 'monthly' ? '月息%' : '年化%'}}</text>
+      <text class="label">{{paymentForm.rateMode == 'monthly' ? '月利率%' : '年化%'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="{{paymentForm.rateMode == 'monthly' ? '例如 0.59' : '例如 13.14'}}" type="digit" value="{{paymentForm.annualRate}}" data-form="paymentForm" data-field="annualRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="segmented two">
       <text class="{{paymentForm.rateMode == 'annual' ? 'active' : ''}}" data-form="paymentForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
-      <text class="{{paymentForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="paymentForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+      <text class="{{paymentForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="paymentForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月利率%</text>
     </view>
+    <text class="field-hint" wx:if="{{loanType == 'car' && paymentForm.rateMode == 'monthly'}}">这里按剩余本金递减计息；按原始本金全期计费的销售报价请使用“平息换算”。</text>
     <view class="segmented">
       <text class="{{paymentForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="paymentForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
       <text class="{{paymentForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="paymentForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
       <text class="{{paymentForm.method == 'interestOnly' ? 'active' : ''}}" data-form="paymentForm" data-field="method" data-value="interestOnly" bindtap="setFormValue">先息后本</text>
     </view>
+    <view class="form-error" wx:if="{{paymentResult.error}}">{{paymentResult.error}}</view>
     <view class="result-grid">
       <view class="metric main"><text>{{paymentResult.primaryLabel}}</text><text>{{paymentResult.primaryPayment}}</text></view>
       <view class="metric" wx:if="{{paymentForm.inputMode == 'price'}}"><text>贷款额</text><text>{{paymentResult.loanAmount}}</text></view>
@@ -96,7 +98,7 @@
       <text class="{{comboForm.unit == 'wan' ? 'active' : ''}}" data-form="comboForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
     <view class="field">
-      <text class="label">商贷{{comboForm.rateMode == 'monthly' ? '月息' : '年化'}}</text>
+      <text class="label">商贷{{comboForm.rateMode == 'monthly' ? '月利率' : '年化'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="{{comboForm.rateMode == 'monthly' ? '例如 0.35' : '例如 3.45'}}" type="digit" value="{{comboForm.commercialRate}}" data-form="comboForm" data-field="commercialRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
@@ -106,23 +108,24 @@
       <text class="unit">{{comboForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field">
-      <text class="label">公积金{{comboForm.rateMode == 'monthly' ? '月息' : '年化'}}</text>
+      <text class="label">公积金{{comboForm.rateMode == 'monthly' ? '月利率' : '年化'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="{{comboForm.rateMode == 'monthly' ? '例如 0.25' : '例如 2.85'}}" type="digit" value="{{comboForm.fundRate}}" data-form="comboForm" data-field="fundRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="field">
       <text class="label">贷款年限</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款年限" type="number" value="{{comboForm.years}}" data-form="comboForm" data-field="years" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="必须填写1～50" type="number" value="{{comboForm.years}}" data-form="comboForm" data-field="years" bindinput="onInput" />
       <text class="unit">年</text>
     </view>
     <view class="segmented two">
       <text class="{{comboForm.rateMode == 'annual' ? 'active' : ''}}" data-form="comboForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
-      <text class="{{comboForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="comboForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+      <text class="{{comboForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="comboForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月利率%</text>
     </view>
     <view class="segmented two">
       <text class="{{comboForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="comboForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
       <text class="{{comboForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="comboForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
     </view>
+    <view class="form-error" wx:if="{{comboResult.error}}">{{comboResult.error}}</view>
     <view class="result-grid">
       <view class="metric main"><text>首月/每月</text><text>{{comboResult.primaryPayment}}</text></view>
       <view class="metric"><text>末期还款</text><text>{{comboResult.lastPayment}}</text></view>
@@ -133,8 +136,8 @@
 
   <view wx:if="{{activeTool == 'budget'}}" class="panel">
     <view class="field">
-      <text class="label">月供预算</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="每月能还多少" type="digit" value="{{budgetForm.monthlyBudget}}" data-form="budgetForm" data-field="monthlyBudget" bindinput="onInput" />
+      <text class="label">{{budgetForm.method == 'equalPrincipal' ? '首月月供预算' : '月供预算'}}</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="每月最多能还多少" type="digit" value="{{budgetForm.monthlyBudget}}" data-form="budgetForm" data-field="monthlyBudget" bindinput="onInput" />
       <text class="unit">元</text>
     </view>
     <view class="field">
@@ -146,21 +149,22 @@
       <text wx:for="{{termOptionList}}" wx:key="value" data-form="budgetForm" data-value="{{item.value}}" bindtap="setMonths">{{item.label}}</text>
     </view>
     <view class="field">
-      <text class="label">{{budgetForm.rateMode == 'monthly' ? '月息%' : '年化%'}}</text>
+      <text class="label">{{budgetForm.rateMode == 'monthly' ? '月利率%' : '年化%'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="{{budgetForm.rateMode == 'monthly' ? '例如 0.59' : '例如 13.14'}}" type="digit" value="{{budgetForm.annualRate}}" data-form="budgetForm" data-field="annualRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="segmented two">
       <text class="{{budgetForm.rateMode == 'annual' ? 'active' : ''}}" data-form="budgetForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
-      <text class="{{budgetForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="budgetForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+      <text class="{{budgetForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="budgetForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月利率%</text>
     </view>
     <view class="segmented two">
       <text class="{{budgetForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="budgetForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
       <text class="{{budgetForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="budgetForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
     </view>
+    <view class="form-error" wx:if="{{budgetResult.error}}">{{budgetResult.error}}</view>
     <view class="result-grid">
       <view class="metric main"><text>可贷本金</text><text>{{budgetResult.principal}}</text></view>
-      <view class="metric"><text>首月/每月</text><text>{{budgetResult.primaryPayment}}</text></view>
+      <view class="metric"><text>{{budgetResult.primaryLabel}}</text><text>{{budgetResult.primaryPayment}}</text></view>
       <view class="metric"><text>总利息</text><text>{{budgetResult.totalInterest}}</text></view>
       <view class="metric"><text>还款总额</text><text>{{budgetResult.totalPayment}}</text></view>
     </view>
@@ -176,23 +180,34 @@
       <text class="{{actualForm.unit == 'yuan' ? 'active' : ''}}" data-form="actualForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
       <text class="{{actualForm.unit == 'wan' ? 'active' : ''}}" data-form="actualForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
-    <view class="segmented two">
+    <text class="section-label inner">还款结构</text>
+    <view class="segmented">
+      <text class="{{actualForm.paymentStructure == 'equalPayment' ? 'active' : ''}}" data-form="actualForm" data-field="paymentStructure" data-value="equalPayment" bindtap="setFormValue">等额月供</text>
+      <text class="{{actualForm.paymentStructure == 'balloon' ? 'active' : ''}}" data-form="actualForm" data-field="paymentStructure" data-value="balloon" bindtap="setFormValue">尾款贷</text>
+      <text class="{{actualForm.paymentStructure == 'interestOnly' ? 'active' : ''}}" data-form="actualForm" data-field="paymentStructure" data-value="interestOnly" bindtap="setFormValue">先息后本</text>
+    </view>
+    <view class="segmented two" wx:if="{{actualForm.paymentStructure == 'equalPayment'}}">
       <text class="{{actualForm.inputMode == 'payment' ? 'active' : ''}}" data-form="actualForm" data-field="inputMode" data-value="payment" bindtap="setFormValue">知道月供</text>
       <text class="{{actualForm.inputMode == 'interest' ? 'active' : ''}}" data-form="actualForm" data-field="inputMode" data-value="interest" bindtap="setFormValue">只知总利息</text>
     </view>
     <view class="field" wx:if="{{actualForm.inputMode == 'payment'}}">
-      <text class="label">实际月供</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="输入合同月供" type="digit" value="{{actualForm.monthlyPayment}}" data-form="actualForm" data-field="monthlyPayment" bindinput="onInput" />
+      <text class="label">{{actualForm.paymentStructure == 'interestOnly' ? '每期利息' : '实际月供'}}</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="输入合同还款额" type="digit" value="{{actualForm.monthlyPayment}}" data-form="actualForm" data-field="monthlyPayment" bindinput="onInput" />
       <text class="unit">元</text>
     </view>
     <view class="field" wx:if="{{actualForm.inputMode == 'interest'}}">
       <text class="label">总利息</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="整个贷款多付的利息" type="digit" value="{{actualForm.totalInterest}}" data-form="actualForm" data-field="totalInterest" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="仅适用于等额月供" type="digit" value="{{actualForm.totalInterest}}" data-form="actualForm" data-field="totalInterest" bindinput="onInput" />
+      <text class="unit">{{actualForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="field" wx:if="{{actualForm.paymentStructure == 'balloon'}}">
+      <text class="label">末期尾款</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="最后一期额外归还" type="digit" value="{{actualForm.balloonAmount}}" data-form="actualForm" data-field="balloonAmount" bindinput="onInput" />
       <text class="unit">{{actualForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field">
       <text class="label">前置费用</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="GPS费/服务费等，没有留空" type="digit" value="{{actualForm.upfrontFee}}" data-form="actualForm" data-field="upfrontFee" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="服务费等，没有留空" type="digit" value="{{actualForm.upfrontFee}}" data-form="actualForm" data-field="upfrontFee" bindinput="onInput" />
       <text class="unit">{{actualForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field">
@@ -202,22 +217,26 @@
     </view>
     <view class="field">
       <text class="label">对外{{actualForm.claimedRateMode == 'monthly' ? '月息%' : '年化%'}}</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="{{actualForm.claimedRateMode == 'monthly' ? '例如 0.59' : '例如 7.08'}}" type="digit" value="{{actualForm.claimedMonthlyRate}}" data-form="actualForm" data-field="claimedMonthlyRate" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="选填，用于口径比较" type="digit" value="{{actualForm.claimedMonthlyRate}}" data-form="actualForm" data-field="claimedMonthlyRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="segmented two">
       <text class="{{actualForm.claimedRateMode == 'annual' ? 'active' : ''}}" data-form="actualForm" data-field="claimedRateMode" data-value="annual" bindtap="setFormValue">年化%</text>
       <text class="{{actualForm.claimedRateMode == 'monthly' ? 'active' : ''}}" data-form="actualForm" data-field="claimedRateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
     </view>
+    <text class="field-hint" wx:if="{{actualForm.inputMode == 'interest'}}">只知总利息只能按等额月供折算；尾款贷和先息后本必须填写实际还款结构。</text>
+    <view class="form-error" wx:if="{{actualResult.error}}">{{actualResult.error}}</view>
     <view class="result-grid">
       <view class="metric main"><text>真实月利率</text><text>{{actualResult.monthlyRate}}</text></view>
       <view class="metric"><text>含费月利率</text><text>{{actualResult.feeAdjustedMonthlyRate}}</text></view>
       <view class="metric"><text>名义年化</text><text>{{actualResult.annualNominalRate}}</text></view>
       <view class="metric"><text>复利年化</text><text>{{actualResult.annualEffectiveRate}}</text></view>
+      <view class="metric"><text>含费名义年化</text><text>{{actualResult.feeAdjustedAnnualNominalRate}}</text></view>
       <view class="metric"><text>含费复利年化</text><text>{{actualResult.feeAdjustedAnnualEffectiveRate}}</text></view>
-      <view class="metric"><text>口径倍数</text><text>{{actualResult.claimedMultiple}}</text></view>
-      <view class="metric"><text>月息差</text><text>{{actualResult.claimedMonthlyGap}}</text></view>
+      <view class="metric"><text>{{actualResult.comparisonLabelPrefix}}口径倍数</text><text>{{actualResult.claimedMultiple}}</text></view>
+      <view class="metric"><text>{{actualResult.comparisonLabelPrefix}}月息差</text><text>{{actualResult.claimedMonthlyGap}}</text></view>
       <view class="metric"><text>总利息</text><text>{{actualResult.totalInterest}}</text></view>
+      <view class="metric"><text>总融资成本</text><text>{{actualResult.totalFinancingCost}}</text></view>
     </view>
   </view>
 
@@ -232,7 +251,7 @@
       <text class="{{flatForm.unit == 'wan' ? 'active' : ''}}" data-form="flatForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
     <view class="field">
-      <text class="label">平息{{flatForm.rateMode == 'annual' ? '年化%' : '月息%'}}</text>
+      <text class="label">{{flatForm.rateMode == 'annual' ? '平息年化费率%' : '平息月费率%'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="{{flatForm.rateMode == 'monthly' ? '例如 0.59' : '例如 7.08'}}" type="digit" value="{{flatForm.monthlyFlatRate}}" data-form="flatForm" data-field="monthlyFlatRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
@@ -242,13 +261,16 @@
       <text class="unit">期</text>
     </view>
     <view class="segmented two">
-      <text class="{{flatForm.rateMode == 'annual' ? 'active' : ''}}" data-form="flatForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
-      <text class="{{flatForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="flatForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+      <text class="{{flatForm.rateMode == 'annual' ? 'active' : ''}}" data-form="flatForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">平息年化%</text>
+      <text class="{{flatForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="flatForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">平息月费率%</text>
     </view>
+    <text class="field-hint">平息按原始本金全期计费，真实资金占用会逐月减少。</text>
+    <view class="form-error" wx:if="{{flatResult.error}}">{{flatResult.error}}</view>
     <view class="result-grid">
       <view class="metric main"><text>平息月供</text><text>{{flatResult.monthlyPayment}}</text></view>
       <view class="metric"><text>真实月利率</text><text>{{flatResult.actualMonthlyRate}}</text></view>
-      <view class="metric"><text>真实年化</text><text>{{flatResult.actualAnnualEffectiveRate}}</text></view>
+      <view class="metric"><text>名义年化</text><text>{{flatResult.actualAnnualNominalRate}}</text></view>
+      <view class="metric"><text>复利年化</text><text>{{flatResult.actualAnnualEffectiveRate}}</text></view>
       <view class="metric"><text>总利息</text><text>{{flatResult.totalInterest}}</text></view>
     </view>
   </view>
@@ -272,13 +294,13 @@
       <text wx:for="{{termOptionList}}" wx:key="value" data-form="balloonForm" data-value="{{item.value}}" bindtap="setMonths">{{item.label}}</text>
     </view>
     <view class="field">
-      <text class="label">{{balloonForm.rateMode == 'monthly' ? '月息%' : '年化%'}}</text>
+      <text class="label">{{balloonForm.rateMode == 'monthly' ? '月利率%' : '年化%'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="{{balloonForm.rateMode == 'monthly' ? '例如 0.59' : '例如 13.14'}}" type="digit" value="{{balloonForm.annualRate}}" data-form="balloonForm" data-field="annualRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="segmented two">
       <text class="{{balloonForm.rateMode == 'annual' ? 'active' : ''}}" data-form="balloonForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
-      <text class="{{balloonForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="balloonForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+      <text class="{{balloonForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="balloonForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月利率%</text>
     </view>
     <view class="quick-row">
       <text wx:for="{{balloonRatioOptions}}" wx:key="*this" data-form="balloonForm" data-field="balloonRatio" data-value="{{item}}" bindtap="setFormValue">尾款{{item}}%</text>
@@ -288,6 +310,7 @@
       <input class="input" placeholder-class="input-placeholder" placeholder="自定义尾款金额" type="digit" value="{{balloonForm.balloonAmount}}" data-form="balloonForm" data-field="balloonAmount" bindinput="onInput" />
       <text class="unit">{{balloonForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
+    <view class="form-error" wx:if="{{balloonResult.error}}">{{balloonResult.error}}</view>
     <view class="result-grid">
       <view class="metric main"><text>月供</text><text>{{balloonResult.monthlyPayment}}</text></view>
       <view class="metric"><text>末期还款(含尾款)</text><text>{{balloonResult.lastPayment}}</text></view>
@@ -301,16 +324,26 @@
   <view wx:if="{{activeTool == 'prepay'}}" class="panel">
     <view class="field">
       <text class="label">贷款本金</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款金额" type="digit" value="{{prepayForm.principal}}" data-form="prepayForm" data-field="principal" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="输入原贷款金额" type="digit" value="{{prepayForm.principal}}" data-form="prepayForm" data-field="principal" bindinput="onInput" />
       <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="segmented two">
       <text class="{{prepayForm.unit == 'yuan' ? 'active' : ''}}" data-form="prepayForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
       <text class="{{prepayForm.unit == 'wan' ? 'active' : ''}}" data-form="prepayForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
     </view>
+    <text class="section-label inner">原还款方式</text>
+    <view class="segmented two">
+      <text class="{{prepayForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="prepayForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
+      <text class="{{prepayForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="prepayForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
+    </view>
     <view class="field">
-      <text class="label">{{prepayForm.rateMode == 'monthly' ? '月息%' : '年化%'}}</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="{{prepayForm.rateMode == 'monthly' ? '例如 0.59' : '例如 13.14'}}" type="digit" value="{{prepayForm.annualRate}}" data-form="prepayForm" data-field="annualRate" bindinput="onInput" />
+      <text class="label">当前剩余本金</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="选填，优先使用银行余额" type="digit" value="{{prepayForm.currentBalance}}" data-form="prepayForm" data-field="currentBalance" bindinput="onInput" />
+      <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="field">
+      <text class="label">{{prepayForm.rateMode == 'monthly' ? '月利率%' : '年化%'}}</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="输入合同利率" type="digit" value="{{prepayForm.annualRate}}" data-form="prepayForm" data-field="annualRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="field">
@@ -330,7 +363,7 @@
     </view>
     <view class="segmented two">
       <text class="{{prepayForm.rateMode == 'annual' ? 'active' : ''}}" data-form="prepayForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
-      <text class="{{prepayForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="prepayForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+      <text class="{{prepayForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="prepayForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月利率%</text>
     </view>
     <view class="segmented two">
       <text class="{{prepayForm.penaltyMode == 'percent' ? 'active' : ''}}" data-form="prepayForm" data-field="penaltyMode" data-value="percent" bindtap="setFormValue">违约金%</text>
@@ -338,7 +371,7 @@
     </view>
     <view class="field" wx:if="{{prepayForm.penaltyMode == 'percent'}}">
       <text class="label">违约金比例</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="按提前还款额收，常见2~3，没有留空" type="digit" value="{{prepayForm.penaltyPercent}}" data-form="prepayForm" data-field="penaltyPercent" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="没有可留空" type="digit" value="{{prepayForm.penaltyPercent}}" data-form="prepayForm" data-field="penaltyPercent" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="field" wx:if="{{prepayForm.penaltyMode == 'amount'}}">
@@ -350,6 +383,8 @@
       <text class="{{prepayForm.reduceMode == 'term' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="term" bindtap="setFormValue">缩短期限</text>
       <text class="{{prepayForm.reduceMode == 'payment' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="payment" bindtap="setFormValue">降低月供</text>
     </view>
+    <text class="field-hint">默认按最近一期还款完成后立即提前还款估算，不包含两个还款日之间的按日利息。</text>
+    <view class="form-error" wx:if="{{prepayResult.error}}">{{prepayResult.error}}</view>
     <view class="result-grid">
       <view class="metric"><text>当前剩余本金</text><text>{{prepayResult.remainingBalance}}</text></view>
       <view class="metric"><text>还后本金</text><text>{{prepayResult.afterPrepayBalance}}</text></view>
@@ -388,5 +423,9 @@
         </view>
       </view>
     </scroll-view>
+  </view>
+
+  <view class="assumption-note">
+    <text>按固定利率、等间隔月度还款测算；首期年月只用于明细标记，不参与按日计息。非整月首期、利率调整及未录入费用可能造成差异，实际以合同和正式还款计划为准。</text>
   </view>
 </view>
