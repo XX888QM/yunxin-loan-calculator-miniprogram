@@ -11,23 +11,32 @@
 - 车贷工具：算月供、查真利率、平息换算、尾款贷
 - 房贷工具：算月供、组合贷、能贷多少、提前还款
 - 快捷期数：车贷 12/24/36/48/60 期；房贷 5/10/20/30 年
-- 金额单位：元 / 万，房贷默认按万输入
-- 利率口径：年化% / 月息%
+- 金额单位：元 / 万；切换单位或贷款类型时保持实际金额不变
+- 普通贷款利率支持年化% / 月利率%，平息工具单独使用平息月费率/年费率
 - 支持车价或房价减首付模式，首付比例可快速选择 20/30/40/50%
-- 根据本金、期数、月供或总利息反推真实月利率、名义年化和复利年化
-- 支持前置费用摊入，计算含费真实利率
-- 支持平息口径换算，反推真实资金成本
-- 支持尾款贷，展示低月供、大尾款方案与等额本息的成本差异
-- 支持等额本息提前还款估算，可计入比例或固定违约金
+- 还款明细按“分”入账，汇总金额与逐期明细严格一致
+- 查真利率支持等额月供、尾款贷和先息后本现金流
+- “只知总利息”仅按等额月供折算，不用于尾款贷或先息后本
+- 支持前置费用摊入，展示含费月利率、含费名义年化、含费复利年化及总融资成本
+- 平息换算同时展示真实月利率、名义年化和复利年化
+- 提前还款支持等额本息、等额本金、比例/固定违约金，以及可选的当前剩余本金
 - 支持还款明细首期年月设置、表格预览、本地 PDF 导出和自愿分享
+- 必填项、期数、首付、尾款和前置费用均进行显式校验，不再静默改写关键输入
 
 ## 计算口径
 
 - 年化%按名义年利率处理，月利率 = 年化利率 / 12。
-- 月息%会先折算成年化利率，再进入还款计算。
-- 真实利率按现金流 IRR 反推。
-- 平息/月息按本金全期计息，再用实际月供反推真实资金成本。
-- 提前还款净省 = 节省利息 - 违约金，结果可能为负。
+- 普通“月利率%”按剩余本金递减计息；按原始本金全期计费的销售报价应使用“平息换算”。
+- 平息总利息 = 本金 × 平息月费率 × 期数，再按实际还款现金流反推真实资金成本。
+- 真实利率通过完整月度现金流 IRR 反推；无有效非负利率时返回明确错误，不伪装成 0%。
+- 前置费用口径以净到手本金 = 名义本金 − 前置费用反推。
+- 总融资成本 = 总利息 + 已录入前置费用。
+- 提前还款净省 = 节省利息 − 违约金，结果可能为负。
+- 首期年月只用于明细标签，不参与按日计息。
+
+## 适用边界
+
+默认按固定利率、等间隔月度还款测算。不包含非整月首期、按日计息、中途利率调整或未录入的月度费用。组合贷默认商贷和公积金期限、还款方式及首期时间相同。实际结果以合同、正式还款计划和当前剩余本金为准。
 
 ## 隐私与安全
 
@@ -43,9 +52,11 @@
 
 ```bash
 npm test
+node --check utils/loan.js
+node --check pages/index/index.js
 ```
 
-测试覆盖计算引擎、PDF 生成和页面逻辑。发布包通过 `project.config.json` 排除文档、测试、npm 文件、私有配置和 Git 文件。
+测试覆盖计算引擎、现金流 IRR、分币不变量、单位切换、输入校验、PDF 生成和页面逻辑。发布包通过 `project.config.json` 排除文档、测试、npm 文件、私有配置和 Git 文件。
 
 ## 免责声明
 
@@ -61,54 +72,54 @@ MIT
 
 [中文](#车贷房贷计算器微信小程序) | English
 
-A native WeChat Mini Program with no third-party dependencies. It is built for car loan, mortgage, and repayment schedule calculations. All calculations run locally. The app does not provide loan applications, lending, brokerage, or financial matching services.
+A native WeChat Mini Program with no third-party dependencies. It is built for car loan, mortgage, repayment-schedule, and funding-cost calculations. All calculations run locally. The app does not provide loan applications, lending, brokerage, or financial matching services.
 
 ## Features
 
-- Loan types: car loan and mortgage
-- Repayment methods: equal installment, equal principal, and interest-only
-- Car loan tools: payment calculator, real-rate checker, flat-rate converter, and balloon loan calculator
-- Mortgage tools: payment calculator, combined loan calculator, affordability calculator, and early repayment estimator
-- Quick terms: 12/24/36/48/60 months for car loans; 5/10/20/30 years for mortgages
-- Amount units: yuan or ten-thousand yuan, with mortgages defaulting to ten-thousand yuan
-- Rate modes: annual rate or monthly rate
-- Price minus down payment input mode with quick down payment ratios: 20/30/40/50%
-- Reverse-calculates real monthly rate, nominal annual rate, and effective annual rate from principal, term, payment, or total interest
-- Includes upfront fees when calculating fee-adjusted real rates
-- Converts flat-rate quotes into real funding cost
-- Supports balloon loans and compares them against equal installment loans
-- Estimates early repayment impact with percentage or fixed penalties
-- Shows repayment schedules by calendar month, exports local PDFs, and supports voluntary sharing
+- Car-loan and mortgage modes
+- Equal installment, equal principal, and interest-only repayment
+- Payment, real-rate, flat-rate, balloon, combined-loan, affordability, and prepayment tools
+- Yuan / ten-thousand-yuan display with amount-preserving unit switches
+- Cent-level repayment schedules whose row totals exactly match summary totals
+- Cash-flow IRR for equal payments, balloon loans, and interest-only loans
+- Upfront-fee-adjusted monthly, nominal annual, and effective annual rates
+- Flat-rate conversion with both nominal and effective annual rates
+- Early repayment for equal installment or equal principal, with optional current balance and penalties
+- Explicit input validation instead of silently clamping important values
+- Calendar-labelled schedules, local PDF export, and voluntary sharing
 
 ## Calculation Rules
 
-- Annual rate input is treated as nominal annual interest. Monthly rate = annual rate / 12.
-- Monthly rate input is converted to annual rate before repayment calculation.
-- Real interest rate is inferred by cash-flow IRR.
-- Flat-rate quotes are calculated against the original principal for the full term, then converted back to real funding cost through the actual payment stream.
-- Early repayment net saving = interest saved - penalty. It can be negative.
+- Annual-rate input is treated as a nominal annual rate; monthly rate = annual rate / 12.
+- Standard monthly-rate input is charged on the declining balance.
+- Flat-rate quotes are charged against the original principal for the full term and are converted through actual cash flows.
+- Real rates are inferred from complete monthly cash flows. Invalid or insufficient cash flows return an explicit error rather than a fake 0% result.
+- Fee-adjusted rates use net proceeds = principal − upfront fees.
+- Total financing cost = interest + entered upfront fees.
+- Early-repayment net saving = interest saved − penalty.
+
+## Assumptions
+
+Calculations assume a fixed rate and equally spaced monthly payments. The selected first month only labels schedule rows and does not introduce day-count interest. Irregular first periods, daily interest, rate resets, and unentered recurring fees are outside the model. Actual results should be checked against the contract, formal repayment plan, and current outstanding balance.
 
 ## Privacy and Security
 
-- No login required.
-- No backend service.
-- No user-entered amounts, rates, or repayment schedules are uploaded.
-- PDFs are generated locally and written only to the user's temporary file directory.
-- The public `project.config.json` uses `touristappid`; the real AppID should stay in the uncommitted local `project.private.config.json`.
+- No login or backend service
+- No upload of entered amounts, rates, or schedules
+- PDFs are generated locally in the Mini Program temporary directory
+- The public project uses `touristappid`; the real AppID remains in the uncommitted private config
 
 ## Development
 
-Open this folder in WeChat Developer Tools. Preview and upload require the current WeChat account to be a developer of the Mini Program.
-
 ```bash
 npm test
+node --check utils/loan.js
+node --check pages/index/index.js
 ```
-
-Tests cover the calculation engine, PDF generation, and page logic. The upload package excludes documentation, tests, npm files, private config, and Git files through `project.config.json`.
 
 ## Disclaimer
 
-This tool is for estimation and comparison only. Actual loan cost, repayment schedule, fees, and penalties should be confirmed against formal contracts, repayment plans, and the relevant financial institution.
+This tool is for estimation and comparison only. Actual loan cost, repayment schedule, fees, and penalties should be confirmed against formal contracts and repayment plans.
 
 ## License
 

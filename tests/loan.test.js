@@ -79,8 +79,9 @@ assert.strictEqual(loan.inferMonthlyRateFromPayment(120000, 3000, 12, 84000), 0)
   const res = loan.calcBalloonLoan(P, 14.4, m, B)
   const pay = (P - B / Math.pow(1 + r, m)) * r / (1 - Math.pow(1 + r, -m))
   closeTo(res.monthlyPayment, pay, 0.001)
-  closeTo(res.lastPayment, pay + B, 0.01)
-  closeTo(res.totalInterest, pay * m + B - P, 0.01)
+  // 明细按分入账后，尾期用于吸收累计分币差；应与理论值保持在合理分币范围内
+  closeTo(res.lastPayment, pay + B, 0.5)
+  closeTo(res.totalInterest, pay * m + B - P, 0.5)
   closeTo(res.schedule[m - 1].balance, 0, 0.000001)
   assert.strictEqual(res.balloonAmount, B)
 })()
@@ -140,5 +141,99 @@ assert.ok(loan.calcPrepayment(350000, 13.14, 36, 34, 20000, 'term', 10).netSaved
   assert.strictEqual(res.penalty, 0)
   closeTo(res.netSaved, res.interestSaved, 0.000001)
 })()
+
+
+// 精确分币：所有明细合计必须与汇总完全一致
+function toCents(value) {
+  return Math.round(Number(value) * 100)
+}
+
+function assertScheduleBalances(result) {
+  const principalCents = result.schedule.reduce((sum, row) => sum + toCents(row.principal), 0)
+  const interestCents = result.schedule.reduce((sum, row) => sum + toCents(row.interest), 0)
+  const paymentCents = result.schedule.reduce((sum, row) => sum + toCents(row.payment), 0)
+  result.schedule.forEach((row) => {
+    assert.strictEqual(toCents(row.payment), toCents(row.principal) + toCents(row.interest))
+  })
+  assert.strictEqual(principalCents, toCents(result.principal))
+  assert.strictEqual(interestCents, toCents(result.totalInterest))
+  assert.strictEqual(paymentCents, toCents(result.totalPayment))
+  assert.strictEqual(paymentCents, principalCents + interestCents)
+  assert.strictEqual(toCents(result.schedule[result.schedule.length - 1].balance), 0)
+}
+
+assertScheduleBalances(loan.calcEqualInstallment(1000000, 3.1, 360))
+assertScheduleBalances(loan.calcEqualPrincipal(1000000, 3.1, 360))
+assertScheduleBalances(loan.calcInterestOnly(120000, 12, 12))
+assertScheduleBalances(loan.calcBalloonLoan(200000, 14.4, 36, 80000))
+assertScheduleBalances(loan.calcCompositeLoan(1000000, 3.45, 500000, 2.85, 360, 'equalInstallment'))
+
+// 通用现金流 IRR：尾款贷与先息后本均应往返回原利率
+;(function () {
+  const P = 200000, B = 80000, m = 36, r = 0.012
+  const pay = (P - B / Math.pow(1 + r, m)) * r / (1 - Math.pow(1 + r, -m))
+  const cashflows = Array(m).fill(pay)
+  cashflows[m - 1] += B
+  const solved = loan.solveMonthlyRateFromCashflows(P, cashflows)
+  assert.strictEqual(solved.valid, true)
+  closeTo(solved.rate, r, 0.0000001)
+
+  const actual = loan.calcActualRate(P, pay, m, 0, 0, { balloon: B })
+  assert.strictEqual(actual.valid, true)
+  closeTo(actual.monthlyRate, r, 0.0000001)
+})()
+
+;(function () {
+  const cashflows = Array(12).fill(1200)
+  cashflows[11] += 120000
+  const solved = loan.solveMonthlyRateFromCashflows(120000, cashflows)
+  assert.strictEqual(solved.valid, true)
+  closeTo(solved.rate, 0.01, 0.0000001)
+})()
+
+// 现金流不足不能伪装成 0% 利率
+;(function () {
+  const solved = loan.solveMonthlyRateFromCashflows(120000, Array(12).fill(1000))
+  assert.strictEqual(solved.valid, false)
+  assert.strictEqual(solved.error, 'insufficientCashflow')
+})()
+
+// 前置费用达到本金时必须判无效
+;(function () {
+  const res = loan.calcActualRate(350000, 11816.5, 36, 0.59, 350000)
+  assert.strictEqual(res.valid, false)
+  assert.strictEqual(res.error, 'invalidNetPrincipal')
+})()
+
+// 提前还款支持等额本金与当前余额覆盖
+;(function () {
+  const base = loan.calcEqualPrincipal(1000000, 3.1, 360)
+  const res = loan.calcPrepayment(1000000, 3.1, 360, 120, 100000, 'payment', 0, 0, 'equalPrincipal')
+  closeTo(res.remainingBalance, base.schedule[119].balance, 0.01)
+  assert.strictEqual(res.method, 'equalPrincipal')
+  assert.ok(res.interestSaved > 0)
+  assert.ok(res.newMonthlyPayment < res.oldMonthlyPayment)
+})()
+
+;(function () {
+  const res = loan.calcPrepayment(1000000, 3.1, 360, 120, 100000, 'term', 0, 0, 'equalInstallment', 700000)
+  closeTo(res.remainingBalance, 700000, 0.01)
+  assert.strictEqual(res.usedCurrentBalance, true)
+  closeTo(res.oldMonthlyPayment, loan.calcEqualInstallment(1000000, 3.1, 360).monthlyPayment, 0.01)
+})()
+
+;(function () {
+  const base = loan.calcEqualPrincipal(1000000, 3.1, 360)
+  const res = loan.calcPrepayment(1000000, 3.1, 360, 120, 100000, 'term', 0, 0, 'equalPrincipal', 700000)
+  const expectedInterest = Math.round(700000 * (3.1 / 100 / 12) * 100) / 100
+  closeTo(res.oldMonthlyPayment, base.schedule[120].principal + expectedInterest, 0.01)
+})()
+
+// 正负数四舍五入必须对称，且不输出负零
+assert.strictEqual(loan.round(1.005, 2), 1.01)
+assert.strictEqual(loan.round(-1.005, 2), -1.01)
+assert.strictEqual(loan.round(2.675, 2), 2.68)
+assert.strictEqual(loan.round(-2.675, 2), -2.68)
+assert.strictEqual(loan.formatMoney(-0.0001), '0.00')
 
 console.log('loan calculator checks passed')

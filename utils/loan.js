@@ -1,5 +1,7 @@
 var MAX_MONTHS = 600
 var ZERO_RATE = 1e-10
+var MONEY_SCALE = 100
+var MAX_IRR_RATE = 1048576
 
 function toNumber(value, fallback) {
   if (fallback === undefined) fallback = 0
@@ -20,12 +22,29 @@ function isZeroRate(rate) {
 
 function round(value, digits) {
   if (digits === undefined) digits = 2
+  value = toNumber(value)
   var scale = Math.pow(10, digits)
-  return Math.round((value + Number.EPSILON) * scale) / scale
+  var sign = value < 0 ? -1 : 1
+  var rounded = sign * Math.round((Math.abs(value) + Number.EPSILON) * scale) / scale
+  return rounded === 0 ? 0 : rounded
+}
+
+function toCents(value) {
+  return Math.round((nonNegative(value) + Number.EPSILON) * MONEY_SCALE)
+}
+
+function fromCents(value) {
+  return value / MONEY_SCALE
+}
+
+function moneyFromCents(value) {
+  return round(fromCents(value), 2)
 }
 
 function formatMoney(value) {
-  var fixed = round(toNumber(value), 2).toFixed(2)
+  var rounded = round(toNumber(value), 2)
+  if (rounded === 0) rounded = 0
+  var fixed = rounded.toFixed(2)
   var parts = fixed.split('.')
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
   return parts.join('.')
@@ -40,99 +59,134 @@ function monthlyRateFromAnnual(annualRatePercent) {
   return nonNegative(annualRatePercent) / 100 / 12
 }
 
+function annualEffectiveRate(monthlyRate) {
+  var value = Math.pow(1 + monthlyRate, 12) - 1
+  return Number.isFinite(value) ? value : Infinity
+}
+
 function normalizeMonths(months) {
   return Math.min(MAX_MONTHS, Math.max(1, Math.round(toNumber(months, 1))))
 }
 
+function sumScheduleCents(schedule, field) {
+  return schedule.reduce(function (sum, row) {
+    return sum + Math.round(toNumber(row[field]) * MONEY_SCALE)
+  }, 0)
+}
+
 function baseResult(principal, annualRatePercent, months, method, schedule) {
-  var totalPayment = schedule.reduce(function (sum, row) {
-    return sum + row.payment
-  }, 0)
-  var totalInterest = schedule.reduce(function (sum, row) {
-    return sum + row.interest
-  }, 0)
+  var principalCents = toCents(principal)
+  var totalPaymentCents = sumScheduleCents(schedule, 'payment')
+  var totalInterestCents = sumScheduleCents(schedule, 'interest')
+  var lastRow = null
+  for (var i = schedule.length - 1; i >= 0; i -= 1) {
+    if (schedule[i].payment || schedule[i].principal || schedule[i].interest || schedule[i].balance) {
+      lastRow = schedule[i]
+      break
+    }
+  }
   return {
-    principal: principal,
+    principal: moneyFromCents(principalCents),
     annualRate: nonNegative(annualRatePercent),
     months: months,
     method: method,
     monthlyRate: monthlyRateFromAnnual(annualRatePercent),
-    totalPayment: totalPayment,
-    totalInterest: totalInterest,
+    totalPayment: moneyFromCents(totalPaymentCents),
+    totalInterest: moneyFromCents(totalInterestCents),
     firstPayment: schedule[0] ? schedule[0].payment : 0,
-    lastPayment: schedule[schedule.length - 1] ? schedule[schedule.length - 1].payment : 0,
+    lastPayment: lastRow ? lastRow.payment : 0,
     monthlyPayment: schedule[0] ? schedule[0].payment : 0,
     schedule: schedule
   }
 }
 
+function scheduleRow(month, paymentCents, principalCents, interestCents, balanceCents) {
+  return {
+    month: month,
+    payment: moneyFromCents(paymentCents),
+    principal: moneyFromCents(principalCents),
+    interest: moneyFromCents(interestCents),
+    balance: moneyFromCents(balanceCents)
+  }
+}
+
 function calcEqualInstallment(principal, annualRatePercent, months) {
-  principal = nonNegative(principal)
+  var principalCents = toCents(principal)
+  principal = moneyFromCents(principalCents)
   months = normalizeMonths(months)
   var r = monthlyRateFromAnnual(annualRatePercent)
-  var payment = isZeroRate(r) ? principal / months : principal * r * Math.pow(1 + r, months) / (Math.pow(1 + r, months) - 1)
-  var balance = principal
+  var theoreticalPayment = isZeroRate(r)
+    ? principal / months
+    : principal * r * Math.pow(1 + r, months) / (Math.pow(1 + r, months) - 1)
+  var paymentCents = toCents(theoreticalPayment)
+  var balanceCents = principalCents
   var schedule = []
 
   for (var i = 1; i <= months; i += 1) {
-    var interest = balance * r
-    var principalPart = payment - interest
-    if (i === months) principalPart = balance
-    var rowPayment = principalPart + interest
-    balance = Math.max(0, balance - principalPart)
-    schedule.push({
-      month: i,
-      payment: rowPayment,
-      principal: principalPart,
-      interest: interest,
-      balance: balance
-    })
+    var interestCents = Math.round(balanceCents * r)
+    var principalPartCents
+    var rowPaymentCents
+
+    if (i === months) {
+      principalPartCents = balanceCents
+      rowPaymentCents = principalPartCents + interestCents
+    } else if (balanceCents <= 0) {
+      principalPartCents = 0
+      interestCents = 0
+      rowPaymentCents = 0
+    } else {
+      principalPartCents = paymentCents - interestCents
+      if (principalPartCents <= 0) principalPartCents = Math.min(balanceCents, 1)
+      principalPartCents = Math.min(balanceCents, principalPartCents)
+      rowPaymentCents = principalPartCents + interestCents
+    }
+
+    balanceCents = Math.max(0, balanceCents - principalPartCents)
+    schedule.push(scheduleRow(i, rowPaymentCents, principalPartCents, interestCents, balanceCents))
   }
 
-  return baseResult(principal, annualRatePercent, months, 'equalInstallment', schedule)
+  var result = baseResult(principal, annualRatePercent, months, 'equalInstallment', schedule)
+  result.monthlyPayment = theoreticalPayment
+  return result
 }
 
 function calcEqualPrincipal(principal, annualRatePercent, months) {
-  principal = nonNegative(principal)
+  var principalCents = toCents(principal)
+  principal = moneyFromCents(principalCents)
   months = normalizeMonths(months)
   var r = monthlyRateFromAnnual(annualRatePercent)
-  var principalPart = principal / months
-  var balance = principal
+  var balanceCents = principalCents
+  var repaidPrincipalCents = 0
   var schedule = []
 
   for (var i = 1; i <= months; i += 1) {
-    var currentPrincipal = i === months ? balance : principalPart
-    var interest = balance * r
-    var payment = currentPrincipal + interest
-    balance = Math.max(0, balance - currentPrincipal)
-    schedule.push({
-      month: i,
-      payment: payment,
-      principal: currentPrincipal,
-      interest: interest,
-      balance: balance
-    })
+    var cumulativePrincipalCents = i === months
+      ? principalCents
+      : Math.round(principalCents * i / months)
+    var currentPrincipalCents = cumulativePrincipalCents - repaidPrincipalCents
+    var interestCents = Math.round(balanceCents * r)
+    var paymentCents = currentPrincipalCents + interestCents
+    repaidPrincipalCents = cumulativePrincipalCents
+    balanceCents = Math.max(0, principalCents - repaidPrincipalCents)
+    schedule.push(scheduleRow(i, paymentCents, currentPrincipalCents, interestCents, balanceCents))
   }
 
   return baseResult(principal, annualRatePercent, months, 'equalPrincipal', schedule)
 }
 
 function calcInterestOnly(principal, annualRatePercent, months) {
-  principal = nonNegative(principal)
+  var principalCents = toCents(principal)
+  principal = moneyFromCents(principalCents)
   months = normalizeMonths(months)
   var r = monthlyRateFromAnnual(annualRatePercent)
-  var interest = principal * r
+  var interestCents = Math.round(principalCents * r)
   var schedule = []
 
   for (var i = 1; i <= months; i += 1) {
-    var principalPart = i === months ? principal : 0
-    schedule.push({
-      month: i,
-      payment: interest + principalPart,
-      principal: principalPart,
-      interest: interest,
-      balance: i === months ? 0 : principal
-    })
+    var principalPartCents = i === months ? principalCents : 0
+    var paymentCents = interestCents + principalPartCents
+    var balanceCents = i === months ? 0 : principalCents
+    schedule.push(scheduleRow(i, paymentCents, principalPartCents, interestCents, balanceCents))
   }
 
   return baseResult(principal, annualRatePercent, months, 'interestOnly', schedule)
@@ -144,90 +198,175 @@ function calculateByMethod(principal, annualRatePercent, months, method) {
   return calcEqualInstallment(principal, annualRatePercent, months)
 }
 
-function presentValueOfPayment(monthlyPayment, months, monthlyRate, balloon) {
+function presentValueOfCashflows(cashflows, monthlyRate) {
   var pv = 0
-  for (var i = 1; i <= months; i += 1) {
-    pv += monthlyPayment / Math.pow(1 + monthlyRate, i)
+  for (var i = 0; i < cashflows.length; i += 1) {
+    pv += cashflows[i] / Math.pow(1 + monthlyRate, i + 1)
   }
-  return pv + (balloon || 0) / Math.pow(1 + monthlyRate, months)
+  return pv
 }
 
-function inferMonthlyRateFromPayment(principal, monthlyPayment, months, balloon) {
+function normalizeCashflows(cashflows) {
+  if (!Array.isArray(cashflows)) return []
+  return cashflows.map(function (value) {
+    return nonNegative(value)
+  })
+}
+
+function solveMonthlyRateFromCashflows(principal, cashflows) {
   principal = nonNegative(principal)
-  monthlyPayment = nonNegative(monthlyPayment)
-  balloon = nonNegative(balloon)
-  months = normalizeMonths(months)
-  if (principal <= 0 || monthlyPayment <= 0) return 0
-  if (monthlyPayment * months + balloon <= principal) return 0
+  cashflows = normalizeCashflows(cashflows)
+
+  if (principal <= 0) {
+    return { valid: false, rate: 0, zeroRate: false, error: 'invalidPrincipal' }
+  }
+  if (!cashflows.length || !cashflows.some(function (value) { return value > 0 })) {
+    return { valid: false, rate: 0, zeroRate: false, error: 'invalidCashflow' }
+  }
+
+  var total = cashflows.reduce(function (sum, value) { return sum + value }, 0)
+  var zeroTolerance = Math.max(1e-8, principal * 1e-12)
+  if (Math.abs(total - principal) <= zeroTolerance) {
+    return { valid: true, rate: 0, zeroRate: true, error: '' }
+  }
+  if (total < principal) {
+    return { valid: false, rate: 0, zeroRate: false, error: 'insufficientCashflow' }
+  }
 
   var low = 0
   var high = 0.02
-  while (presentValueOfPayment(monthlyPayment, months, high, balloon) > principal && high < 1) {
+  var highPv = presentValueOfCashflows(cashflows, high)
+  while (Number.isFinite(highPv) && highPv > principal && high < MAX_IRR_RATE) {
     high *= 2
+    highPv = presentValueOfCashflows(cashflows, high)
   }
 
-  for (var i = 0; i < 80; i += 1) {
+  if (!Number.isFinite(highPv) || highPv > principal) {
+    return { valid: false, rate: 0, zeroRate: false, error: 'rateOutOfRange' }
+  }
+
+  for (var i = 0; i < 100; i += 1) {
     var mid = (low + high) / 2
-    if (presentValueOfPayment(monthlyPayment, months, mid, balloon) > principal) {
+    var pv = presentValueOfCashflows(cashflows, mid)
+    if (!Number.isFinite(pv)) {
+      return { valid: false, rate: 0, zeroRate: false, error: 'rateOutOfRange' }
+    }
+    if (pv > principal) {
       low = mid
     } else {
       high = mid
     }
   }
 
-  return (low + high) / 2
+  return { valid: true, rate: (low + high) / 2, zeroRate: false, error: '' }
 }
 
-function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePercent, upfrontFee) {
-  principal = nonNegative(principal)
+function paymentCashflows(monthlyPayment, months, balloon) {
+  monthlyPayment = nonNegative(monthlyPayment)
+  balloon = nonNegative(balloon)
+  months = normalizeMonths(months)
+  var cashflows = []
+  for (var i = 0; i < months; i += 1) cashflows.push(monthlyPayment)
+  cashflows[months - 1] += balloon
+  return cashflows
+}
+
+function presentValueOfPayment(monthlyPayment, months, monthlyRate, balloon) {
+  return presentValueOfCashflows(paymentCashflows(monthlyPayment, months, balloon), monthlyRate)
+}
+
+function inferMonthlyRateFromPayment(principal, monthlyPayment, months, balloon) {
+  var solved = solveMonthlyRateFromCashflows(
+    principal,
+    paymentCashflows(monthlyPayment, months, balloon)
+  )
+  return solved.valid ? solved.rate : 0
+}
+
+function calcActualRate(principal, monthlyPayment, months, claimedMonthlyRatePercent, upfrontFee, options) {
+  principal = moneyFromCents(toCents(principal))
   monthlyPayment = nonNegative(monthlyPayment)
   months = normalizeMonths(months)
-  upfrontFee = Math.min(nonNegative(upfrontFee), principal)
-  var monthlyRate = inferMonthlyRateFromPayment(principal, monthlyPayment, months)
-  var feeAdjustedMonthlyRate = upfrontFee > 0
-    ? inferMonthlyRateFromPayment(principal - upfrontFee, monthlyPayment, months)
-    : monthlyRate
+  upfrontFee = moneyFromCents(toCents(upfrontFee))
+  options = options || {}
+
+  var cashflows = Array.isArray(options.cashflows)
+    ? normalizeCashflows(options.cashflows)
+    : paymentCashflows(monthlyPayment, months, options.balloon)
+  if (Array.isArray(options.cashflows) && cashflows.length) months = cashflows.length
+
+  var baseSolved = solveMonthlyRateFromCashflows(principal, cashflows)
+  var invalidNetPrincipal = upfrontFee > 0 && upfrontFee >= principal
+  var feeSolved = invalidNetPrincipal
+    ? { valid: false, rate: 0, error: 'invalidNetPrincipal' }
+    : (upfrontFee > 0
+      ? solveMonthlyRateFromCashflows(principal - upfrontFee, cashflows)
+      : baseSolved)
+
+  var monthlyRate = baseSolved.valid ? baseSolved.rate : 0
+  var feeAdjustedMonthlyRate = feeSolved.valid ? feeSolved.rate : 0
   var comparisonMonthlyRate = upfrontFee > 0 ? feeAdjustedMonthlyRate : monthlyRate
   var claimedMonthlyRate = nonNegative(claimedMonthlyRatePercent) / 100
-  var totalPayment = monthlyPayment * months
-  var totalInterest = Math.max(0, totalPayment - principal)
+  var totalPaymentCents = toCents(cashflows.reduce(function (sum, value) { return sum + value }, 0))
+  var totalInterestCents = Math.max(0, totalPaymentCents - toCents(principal))
+  var valid = baseSolved.valid && feeSolved.valid && !invalidNetPrincipal
+  var error = invalidNetPrincipal
+    ? 'invalidNetPrincipal'
+    : (!baseSolved.valid ? baseSolved.error : (!feeSolved.valid ? feeSolved.error : ''))
+
   return {
+    valid: valid,
+    error: error,
     principal: principal,
     months: months,
     monthlyPayment: monthlyPayment,
     monthlyRate: monthlyRate,
     annualNominalRate: monthlyRate * 12,
-    annualEffectiveRate: Math.pow(1 + monthlyRate, 12) - 1,
+    annualEffectiveRate: annualEffectiveRate(monthlyRate),
     upfrontFee: upfrontFee,
     feeAdjustedMonthlyRate: feeAdjustedMonthlyRate,
     feeAdjustedAnnualNominalRate: feeAdjustedMonthlyRate * 12,
-    feeAdjustedAnnualEffectiveRate: Math.pow(1 + feeAdjustedMonthlyRate, 12) - 1,
-    totalPayment: totalPayment,
-    totalInterest: totalInterest,
+    feeAdjustedAnnualEffectiveRate: annualEffectiveRate(feeAdjustedMonthlyRate),
+    totalPayment: moneyFromCents(totalPaymentCents),
+    totalInterest: moneyFromCents(totalInterestCents),
+    totalFinancingCost: moneyFromCents(totalInterestCents + toCents(upfrontFee)),
     claimedMonthlyRate: claimedMonthlyRate,
-    claimedMultiple: claimedMonthlyRate > 0 ? comparisonMonthlyRate / claimedMonthlyRate : 0,
-    claimedMonthlyGap: comparisonMonthlyRate - claimedMonthlyRate
+    claimedMultiple: valid && claimedMonthlyRate > 0 ? comparisonMonthlyRate / claimedMonthlyRate : 0,
+    claimedMonthlyGap: valid && claimedMonthlyRate > 0 ? comparisonMonthlyRate - claimedMonthlyRate : 0,
+    cashflows: cashflows
   }
 }
 
 function calcFlatMonthly(principal, monthlyFlatRatePercent, months) {
-  principal = nonNegative(principal)
+  var principalCents = toCents(principal)
+  principal = moneyFromCents(principalCents)
   months = normalizeMonths(months)
   var flatMonthlyRate = nonNegative(monthlyFlatRatePercent) / 100
-  var totalInterest = principal * flatMonthlyRate * months
-  var monthlyPayment = (principal + totalInterest) / months
-  var actualMonthlyRate = inferMonthlyRateFromPayment(principal, monthlyPayment, months)
+  var totalInterestCents = toCents(principal * flatMonthlyRate * months)
+  var totalPaymentCents = principalCents + totalInterestCents
+  var monthlyPaymentCents = Math.round(totalPaymentCents / months)
+  var cashflows = []
+  for (var i = 1; i <= months; i += 1) {
+    cashflows.push(i === months
+      ? moneyFromCents(totalPaymentCents - monthlyPaymentCents * (months - 1))
+      : moneyFromCents(monthlyPaymentCents))
+  }
+  var solved = solveMonthlyRateFromCashflows(principal, cashflows)
+  var actualMonthlyRate = solved.valid ? solved.rate : 0
 
   return {
+    valid: solved.valid,
+    error: solved.error,
     principal: principal,
     months: months,
     flatMonthlyRate: flatMonthlyRate,
-    monthlyPayment: monthlyPayment,
-    totalPayment: principal + totalInterest,
-    totalInterest: totalInterest,
+    monthlyPayment: moneyFromCents(monthlyPaymentCents),
+    lastPayment: cashflows[cashflows.length - 1],
+    totalPayment: moneyFromCents(totalPaymentCents),
+    totalInterest: moneyFromCents(totalInterestCents),
     actualMonthlyRate: actualMonthlyRate,
     actualAnnualNominalRate: actualMonthlyRate * 12,
-    actualAnnualEffectiveRate: Math.pow(1 + actualMonthlyRate, 12) - 1
+    actualAnnualEffectiveRate: annualEffectiveRate(actualMonthlyRate)
   }
 }
 
@@ -240,17 +379,17 @@ function calcCompositeLoan(commercialPrincipal, commercialRate, fundPrincipal, f
   for (var i = 0; i < months; i += 1) {
     var a = commercial.schedule[i]
     var b = fund.schedule[i]
-    schedule.push({
-      month: i + 1,
-      payment: a.payment + b.payment,
-      principal: a.principal + b.principal,
-      interest: a.interest + b.interest,
-      balance: a.balance + b.balance
-    })
+    schedule.push(scheduleRow(
+      i + 1,
+      toCents(a.payment) + toCents(b.payment),
+      toCents(a.principal) + toCents(b.principal),
+      toCents(a.interest) + toCents(b.interest),
+      toCents(a.balance) + toCents(b.balance)
+    ))
   }
 
   return baseResult(
-    nonNegative(commercialPrincipal) + nonNegative(fundPrincipal),
+    moneyFromCents(toCents(commercialPrincipal) + toCents(fundPrincipal)),
     0,
     months,
     'composite',
@@ -258,8 +397,12 @@ function calcCompositeLoan(commercialPrincipal, commercialRate, fundPrincipal, f
   )
 }
 
+function resultPaymentCents(result, method) {
+  return toCents(method === 'equalPrincipal' ? result.firstPayment : result.monthlyPayment)
+}
+
 function calcAffordableLoan(monthlyBudget, annualRatePercent, months, method) {
-  monthlyBudget = nonNegative(monthlyBudget)
+  monthlyBudget = moneyFromCents(toCents(monthlyBudget))
   months = normalizeMonths(months)
   var r = monthlyRateFromAnnual(annualRatePercent)
   var principal
@@ -267,77 +410,130 @@ function calcAffordableLoan(monthlyBudget, annualRatePercent, months, method) {
   if (method === 'equalPrincipal') {
     principal = isZeroRate(r) ? monthlyBudget * months : monthlyBudget / (1 / months + r)
   } else {
-    principal = isZeroRate(r) ? monthlyBudget * months : monthlyBudget * (Math.pow(1 + r, months) - 1) / (r * Math.pow(1 + r, months))
+    principal = isZeroRate(r)
+      ? monthlyBudget * months
+      : monthlyBudget * (Math.pow(1 + r, months) - 1) / (r * Math.pow(1 + r, months))
   }
 
-  var result = calculateByMethod(principal, annualRatePercent, months, method === 'equalPrincipal' ? 'equalPrincipal' : 'equalInstallment')
+  var principalCents = toCents(principal)
+  var targetMethod = method === 'equalPrincipal' ? 'equalPrincipal' : 'equalInstallment'
+  var result = calculateByMethod(moneyFromCents(principalCents), annualRatePercent, months, targetMethod)
+  var budgetCents = toCents(monthlyBudget)
+  var guard = 0
+
+  while (principalCents > 0 && resultPaymentCents(result, targetMethod) > budgetCents && guard < 10000) {
+    principalCents -= 1
+    result = calculateByMethod(moneyFromCents(principalCents), annualRatePercent, months, targetMethod)
+    guard += 1
+  }
+
+  guard = 0
+  while (guard < 10000) {
+    var next = calculateByMethod(moneyFromCents(principalCents + 1), annualRatePercent, months, targetMethod)
+    if (resultPaymentCents(next, targetMethod) > budgetCents) break
+    principalCents += 1
+    result = next
+    guard += 1
+  }
+
   result.monthlyBudget = monthlyBudget
   return result
 }
 
 function calcBalloonLoan(principal, annualRatePercent, months, balloonAmount) {
-  principal = nonNegative(principal)
+  var principalCents = toCents(principal)
+  principal = moneyFromCents(principalCents)
   months = normalizeMonths(months)
-  var balloon = Math.min(nonNegative(balloonAmount), principal)
+  var balloonCents = Math.min(toCents(balloonAmount), principalCents)
+  var balloon = moneyFromCents(balloonCents)
   var r = monthlyRateFromAnnual(annualRatePercent)
-  var payment = isZeroRate(r)
+  var theoreticalPayment = isZeroRate(r)
     ? (principal - balloon) / months
     : (principal - balloon / Math.pow(1 + r, months)) * r / (1 - Math.pow(1 + r, -months))
-  var balance = principal
+  var paymentCents = toCents(theoreticalPayment)
+  var balanceCents = principalCents
   var schedule = []
 
   for (var i = 1; i <= months; i += 1) {
-    var interest = balance * r
-    var principalPart = payment - interest
-    if (i === months) principalPart = balance
-    var rowPayment = principalPart + interest
-    balance = Math.max(0, balance - principalPart)
-    schedule.push({
-      month: i,
-      payment: rowPayment,
-      principal: principalPart,
-      interest: interest,
-      balance: balance
-    })
+    var interestCents = Math.round(balanceCents * r)
+    var principalPartCents
+    var rowPaymentCents
+
+    if (i === months) {
+      principalPartCents = balanceCents
+      rowPaymentCents = principalPartCents + interestCents
+    } else {
+      principalPartCents = Math.max(0, paymentCents - interestCents)
+      principalPartCents = Math.min(balanceCents, principalPartCents)
+      rowPaymentCents = principalPartCents + interestCents
+    }
+
+    balanceCents = Math.max(0, balanceCents - principalPartCents)
+    schedule.push(scheduleRow(i, rowPaymentCents, principalPartCents, interestCents, balanceCents))
   }
 
   var result = baseResult(principal, annualRatePercent, months, 'balloon', schedule)
   result.balloonAmount = balloon
-  result.monthlyPayment = payment
+  result.monthlyPayment = theoreticalPayment
   return result
 }
 
 function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   var schedule = []
-  var current = nonNegative(balance)
-  payment = nonNegative(payment)
+  var currentCents = toCents(balance)
+  var paymentCents = toCents(payment)
   maxMonths = normalizeMonths(maxMonths || 600)
 
-  for (var i = 1; i <= maxMonths && current > 0.01; i += 1) {
-    var interest = current * monthlyRate
-    var principal = Math.min(current, payment - interest)
-    if (principal <= 0) break
-    current = Math.max(0, current - principal)
-    schedule.push({
-      month: i,
-      payment: principal + interest,
-      principal: principal,
-      interest: interest,
-      balance: current
-    })
+  for (var i = 1; i <= maxMonths && currentCents > 0; i += 1) {
+    var interestCents = Math.round(currentCents * monthlyRate)
+    var principalCents = i === maxMonths ? currentCents : paymentCents - interestCents
+    if (principalCents <= 0) break
+    principalCents = Math.min(currentCents, principalCents)
+    var rowPaymentCents = principalCents + interestCents
+    currentCents = Math.max(0, currentCents - principalCents)
+    schedule.push(scheduleRow(i, rowPaymentCents, principalCents, interestCents, currentCents))
   }
 
   return schedule
 }
 
-function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode, penaltyPercent, penaltyAmount) {
-  var base = calcEqualInstallment(principal, annualRatePercent, months)
+function calcFixedPrincipalSchedule(balance, monthlyRate, principalPayment, maxMonths) {
+  var schedule = []
+  var currentCents = toCents(balance)
+  var principalPaymentCents = Math.max(1, toCents(principalPayment))
+  maxMonths = normalizeMonths(maxMonths || 600)
+
+  for (var i = 1; i <= maxMonths && currentCents > 0; i += 1) {
+    var principalCents = i === maxMonths
+      ? currentCents
+      : Math.min(currentCents, principalPaymentCents)
+    var interestCents = Math.round(currentCents * monthlyRate)
+    var paymentCents = principalCents + interestCents
+    currentCents = Math.max(0, currentCents - principalCents)
+    schedule.push(scheduleRow(i, paymentCents, principalCents, interestCents, currentCents))
+  }
+
+  return schedule
+}
+
+function hasExplicitValue(value) {
+  return value !== undefined && value !== null && String(value).trim() !== ''
+}
+
+function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode, penaltyPercent, penaltyAmount, method, currentBalance) {
+  method = method === 'equalPrincipal' ? 'equalPrincipal' : 'equalInstallment'
+  var base = calculateByMethod(principal, annualRatePercent, months, method)
   months = base.months
   paidMonths = Math.min(Math.max(0, Math.round(toNumber(paidMonths))), months)
-  prepayAmount = nonNegative(prepayAmount)
+  prepayAmount = moneyFromCents(toCents(prepayAmount))
+  var usedCurrentBalance = hasExplicitValue(currentBalance)
 
   if (paidMonths >= months) {
     return {
+      valid: true,
+      error: '',
+      method: method,
+      usedCurrentBalance: usedCurrentBalance,
       remainingBalance: 0,
       afterPrepayBalance: 0,
       oldRemainingInterest: 0,
@@ -353,42 +549,64 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
     }
   }
 
-  var paidRow = paidMonths > 0 ? base.schedule[paidMonths - 1] : null
-  var remainingBalance = paidRow ? paidRow.balance : base.principal
-  var afterPrepayBalance = Math.max(0, remainingBalance - prepayAmount)
-  var effectivePrepay = Math.min(prepayAmount, remainingBalance)
-  var penalty = nonNegative(penaltyAmount) > 0
-    ? nonNegative(penaltyAmount)
-    : effectivePrepay * nonNegative(penaltyPercent) / 100
-  var oldRemainingInterest = base.schedule.slice(paidMonths).reduce(function (sum, row) {
-    return sum + row.interest
-  }, 0)
   var remainingMonths = months - paidMonths
+  var paidRow = paidMonths > 0 ? base.schedule[paidMonths - 1] : null
+  var remainingBalance = usedCurrentBalance
+    ? moneyFromCents(toCents(currentBalance))
+    : (paidRow ? paidRow.balance : base.principal)
+  var nextBaseRow = base.schedule[paidMonths] || base.schedule[base.schedule.length - 1]
+  var oldSchedule
+  if (usedCurrentBalance && method === 'equalPrincipal') {
+    oldSchedule = calcFixedPrincipalSchedule(remainingBalance, base.monthlyRate, nextBaseRow.principal, remainingMonths)
+  } else if (usedCurrentBalance) {
+    oldSchedule = calcFixedPaymentSchedule(remainingBalance, base.monthlyRate, base.monthlyPayment, remainingMonths)
+  } else {
+    oldSchedule = base.schedule.slice(paidMonths)
+  }
+  var afterPrepayBalance = moneyFromCents(Math.max(0, toCents(remainingBalance) - toCents(prepayAmount)))
+  var effectivePrepayCents = Math.min(toCents(prepayAmount), toCents(remainingBalance))
+  var penaltyCents = nonNegative(penaltyAmount) > 0
+    ? toCents(penaltyAmount)
+    : toCents(fromCents(effectivePrepayCents) * nonNegative(penaltyPercent) / 100)
+  var oldRemainingInterestCents = sumScheduleCents(oldSchedule, 'interest')
   var newSchedule
 
-  if (afterPrepayBalance <= 0.01) {
+  if (toCents(afterPrepayBalance) <= 0) {
     newSchedule = []
+  } else if (method === 'equalPrincipal') {
+    if (reduceMode === 'payment') {
+      newSchedule = calcEqualPrincipal(afterPrepayBalance, annualRatePercent, remainingMonths).schedule
+    } else {
+      var nextPrincipal = base.schedule[paidMonths]
+        ? base.schedule[paidMonths].principal
+        : base.schedule[base.schedule.length - 1].principal
+      newSchedule = calcFixedPrincipalSchedule(afterPrepayBalance, base.monthlyRate, nextPrincipal, remainingMonths)
+    }
   } else if (reduceMode === 'payment') {
     newSchedule = calcEqualInstallment(afterPrepayBalance, annualRatePercent, remainingMonths).schedule
   } else {
     newSchedule = calcFixedPaymentSchedule(afterPrepayBalance, base.monthlyRate, base.monthlyPayment, remainingMonths)
   }
 
-  var newRemainingInterest = newSchedule.reduce(function (sum, row) {
-    return sum + row.interest
-  }, 0)
+  var newRemainingInterestCents = sumScheduleCents(newSchedule, 'interest')
+  var interestSavedCents = Math.max(0, oldRemainingInterestCents - newRemainingInterestCents)
+  var oldMonthlyPayment = oldSchedule[0] ? oldSchedule[0].payment : 0
 
   return {
-    remainingBalance: remainingBalance,
+    valid: true,
+    error: '',
+    method: method,
+    usedCurrentBalance: usedCurrentBalance,
+    remainingBalance: moneyFromCents(toCents(remainingBalance)),
     afterPrepayBalance: afterPrepayBalance,
-    oldRemainingInterest: oldRemainingInterest,
-    newRemainingInterest: newRemainingInterest,
-    interestSaved: Math.max(0, oldRemainingInterest - newRemainingInterest),
-    penalty: penalty,
-    netSaved: Math.max(0, oldRemainingInterest - newRemainingInterest) - penalty,
+    oldRemainingInterest: moneyFromCents(oldRemainingInterestCents),
+    newRemainingInterest: moneyFromCents(newRemainingInterestCents),
+    interestSaved: moneyFromCents(interestSavedCents),
+    penalty: moneyFromCents(penaltyCents),
+    netSaved: moneyFromCents(interestSavedCents - penaltyCents),
     oldRemainingMonths: remainingMonths,
     newRemainingMonths: newSchedule.length,
-    oldMonthlyPayment: base.monthlyPayment,
+    oldMonthlyPayment: oldMonthlyPayment,
     newMonthlyPayment: newSchedule[0] ? newSchedule[0].payment : 0,
     schedule: newSchedule
   }
@@ -410,5 +628,6 @@ module.exports = {
   calcAffordableLoan: calcAffordableLoan,
   calcBalloonLoan: calcBalloonLoan,
   calcPrepayment: calcPrepayment,
-  inferMonthlyRateFromPayment: inferMonthlyRateFromPayment
+  inferMonthlyRateFromPayment: inferMonthlyRateFromPayment,
+  solveMonthlyRateFromCashflows: solveMonthlyRateFromCashflows
 }

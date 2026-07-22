@@ -27,8 +27,8 @@ node --check utils/loan.js  # 语法检查
 
 - **所有金额参数一律是"元"**；利率入参是百分数（`13.14` = 年化 13.14%），返回值里的利率是小数（`0.01095`）。
 - 入口防御统一走 `toNumber`（空串/非法返回 fallback）、`nonNegative`、`normalizeMonths`（期数夹 1..600）；零利率分支用 `isZeroRate`/`ZERO_RATE` 避免除零。
-- IRR 反推 = `presentValueOfPayment` + 二分法（`inferMonthlyRateFromPayment`，第 4 参支持末期尾款 balloon）。
-- 分期表构造模式：逐月 `interest = balance * r`，末期 `principalPart = balance` 一把清零，保证本金合计精确、末期余额为 0。
+- IRR 反推以完整月度现金流为基础：`solveMonthlyRateFromCashflows` 负责求根与无根状态，`inferMonthlyRateFromPayment` 保持旧接口并支持末期尾款。
+- 分期表按整数“分”入账：月供和利息逐期舍入到分，等额本金按累计目标分摊余分，末期校正余额；汇总一律从明细求和。
 - **向后兼容铁律：给现有函数加参数必须可缺省，缺省时行为与旧版完全一致**（V1 测试断言一条不许改）。
 
 ### utils/pdf.js — PDF 导出（零依赖）
@@ -38,10 +38,10 @@ node --check utils/loan.js  # 语法检查
 
 ### pages/index/index.js — 单页多工具（ES6：const/箭头函数）
 
-- 每个工具一个 `build*Result()` 方法；`recalculate()` 全量重建所有结果，并按 `activeTool` 切换 `activeSchedulePreview`。
+- 每个工具一个 `build*Result()` 方法；页面在调用引擎前显式校验空值、范围、首付/尾款/费用边界，并按 `activeTool` 切换 `activeSchedulePreview`。
 - 首页定义 `onShareAppMessage` / `onShareTimeline` 并在 `onLoad` 调 `wx.showShareMenu`；还款明细区的分享按钮是自愿转发入口，PDF 导出不依赖分享状态。
 - 表单全存 `data.xxxForm`；事件只有三个通用 handler（`onInput`/`setFormValue`/`setMonths`），由 WXML 的 `data-form`/`data-field`/`data-value` 驱动。成对字段的互斥清空写在 handler 里（`downRatio`↔`downPayment`、`balloonRatio`↔`balloonAmount`）。
-- **万/元换算只发生在页面层**：`amount(value, unit)`（unit==='wan' 时 ×10000），引擎永远收元；月供/月供预算类字段永远按元、不参与换算。
+- **万/元换算只发生在页面层**：引擎永远收元；单位切换通过 `unitSwitchPatch` 同步转换金额输入，保持实际金额不变；月供/月供预算类字段永远按元、不参与换算。
 - 工具导航按贷款类型过滤：`TOOL_OPTIONS.car`（含尾款贷 balloon）、`TOOL_OPTIONS.home`（含组合贷 combo、能贷多少 budget、提前还款 prepay）；快捷期数同理走 `TERM_OPTIONS`。
 
 ### WXML/WXSS
@@ -53,7 +53,7 @@ node --check utils/loan.js  # 语法检查
 
 ## 测试约定
 
-- `page.test.js` mock 全局 `Page`/`wx` 后 require 页面文件，直接调 `build*` 方法断言；它还读取 index.wxml 做文案断言。
+- `page.test.js` mock 全局 `Page`/`wx` 后 require 页面文件，直接调 `build*` 方法和真实事件 handler 断言；它还读取 index.wxml 做文案断言。
 - 数值断言优先用**独立闭式公式**交叉验证（测试里自己写年金公式，不复用引擎内部函数）。
 - 本仓库全程 TDD：改公式先写失败测试，再改实现。
 
