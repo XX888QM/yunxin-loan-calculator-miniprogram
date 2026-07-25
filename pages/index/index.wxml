@@ -1,28 +1,37 @@
 <view class="page">
-  <view class="masthead">
-    <view class="brand-block">
-      <view class="brand-mark">
-        <image class="brand-logo" src="/assets/logo.png" mode="aspectFill" />
-      </view>
-      <view class="masthead-copy">
-        <view class="brand-row">
-          <text class="title">云鑫真实贷款计算器</text>
+  <view class="hero">
+    <view class="masthead">
+      <view class="brand-block">
+        <view class="brand-mark">
+          <image class="brand-logo" src="/assets/logo.png" mode="aspectFill" />
         </view>
-        <text class="subtitle">车贷房贷月供、利率、明细</text>
+        <view class="masthead-copy">
+          <view class="brand-row">
+            <text class="title">云鑫真实贷款计算器</text>
+          </view>
+          <text class="subtitle">看清月供，也看清真实成本</text>
+        </view>
       </view>
     </view>
-    <button class="copy-btn" bindtap="copySummary">复制结果</button>
+    <text class="hero-badge">本地计算 · 不上传 · 仅供测算</text>
   </view>
 
-  <view class="switch-card">
-    <text class="section-label">贷款类型</text>
-    <view class="segmented two">
-      <text wx:for="{{loanTypeList}}" wx:key="value" class="{{loanType == item.value ? 'active' : ''}}" data-value="{{item.value}}" bindtap="setLoanType">{{item.label}}</text>
+  <view class="nav-shell">
+    <view class="switch-card">
+      <text class="section-label">贷款类型</text>
+      <view class="segmented two">
+        <text wx:for="{{loanTypeList}}" wx:key="value" class="{{loanType == item.value ? 'active' : ''}}" data-value="{{item.value}}" bindtap="setLoanType">{{item.label}}</text>
+      </view>
     </view>
-  </view>
 
-  <view class="tool-grid">
-    <view wx:for="{{toolList}}" wx:key="value" class="tool {{activeTool == item.value ? 'active' : ''}}" data-tool="{{item.value}}" bindtap="switchTool">{{item.label}}</view>
+    <view class="tool-grid">
+      <view wx:for="{{toolList}}" wx:key="value" class="tool {{activeTool == item.value ? 'active' : ''}}" data-tool="{{item.value}}" bindtap="switchTool">{{item.label}}</view>
+    </view>
+
+    <view class="tool-guide">
+      <text class="tool-guide-text">{{toolHint}}</text>
+      <text class="sample-btn" bindtap="fillSample">一键示例</text>
+    </view>
   </view>
 
   <view wx:if="{{activeTool == 'payment'}}" class="panel">
@@ -44,6 +53,7 @@
       <view class="quick-row">
         <text wx:for="{{downRatioOptions}}" wx:key="*this" data-form="paymentForm" data-field="downRatio" data-value="{{item}}" bindtap="setFormValue">首付{{item}}%</text>
       </view>
+      <text class="ratio-amount-hint" wx:if="{{downRatioAmountHint}}">{{downRatioAmountHint}}</text>
       <view class="field">
         <text class="label">首付{{paymentForm.downRatio ? paymentForm.downRatio + '%' : '金额'}}</text>
         <input class="input" placeholder-class="input-placeholder" placeholder="自定义首付金额" type="digit" value="{{paymentForm.downPayment}}" data-form="paymentForm" data-field="downPayment" bindinput="onInput" />
@@ -77,13 +87,22 @@
       <text class="{{paymentForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="paymentForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
       <text class="{{paymentForm.method == 'interestOnly' ? 'active' : ''}}" data-form="paymentForm" data-field="method" data-value="interestOnly" bindtap="setFormValue">先息后本</text>
     </view>
-    <view class="form-error" wx:if="{{paymentResult.error}}">{{paymentResult.error}}</view>
+    <view class="{{paymentResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{paymentResult.error}}">{{paymentResult.error}}</view>
+    <view class="result-block">
+    <view class="result-summary" wx:if="{{paymentResult.summaryText}}">
+      <text class="result-summary-label">一句话结论</text>
+      <text class="result-summary-text">{{paymentResult.summaryText}}</text>
+    </view>
+    <view class="result-actions" wx:if="{{paymentResult.valid}}">
+      <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
+    </view>
     <view class="result-grid">
       <view class="metric main"><text>{{paymentResult.primaryLabel}}</text><text>{{paymentResult.primaryPayment}}</text></view>
       <view class="metric" wx:if="{{paymentForm.inputMode == 'price'}}"><text>贷款额</text><text>{{paymentResult.loanAmount}}</text></view>
       <view class="metric"><text>末期还款</text><text>{{paymentResult.lastPayment}}</text></view>
       <view class="metric"><text>总利息</text><text>{{paymentResult.totalInterest}}</text></view>
       <view class="metric"><text>还款总额</text><text>{{paymentResult.totalPayment}}</text></view>
+    </view>
     </view>
   </view>
 
@@ -125,12 +144,21 @@
       <text class="{{comboForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="comboForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
       <text class="{{comboForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="comboForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
     </view>
-    <view class="form-error" wx:if="{{comboResult.error}}">{{comboResult.error}}</view>
+    <view class="{{comboResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{comboResult.error}}">{{comboResult.error}}</view>
+    <view class="result-block">
+    <view class="result-summary" wx:if="{{comboResult.summaryText}}">
+      <text class="result-summary-label">一句话结论</text>
+      <text class="result-summary-text">{{comboResult.summaryText}}</text>
+    </view>
+    <view class="result-actions" wx:if="{{comboResult.valid}}">
+      <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
+    </view>
     <view class="result-grid">
       <view class="metric main"><text>首月/每月</text><text>{{comboResult.primaryPayment}}</text></view>
       <view class="metric"><text>末期还款</text><text>{{comboResult.lastPayment}}</text></view>
       <view class="metric"><text>总利息</text><text>{{comboResult.totalInterest}}</text></view>
       <view class="metric"><text>还款总额</text><text>{{comboResult.totalPayment}}</text></view>
+    </view>
     </view>
   </view>
 
@@ -161,12 +189,21 @@
       <text class="{{budgetForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="budgetForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
       <text class="{{budgetForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="budgetForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
     </view>
-    <view class="form-error" wx:if="{{budgetResult.error}}">{{budgetResult.error}}</view>
+    <view class="{{budgetResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{budgetResult.error}}">{{budgetResult.error}}</view>
+    <view class="result-block">
+    <view class="result-summary" wx:if="{{budgetResult.summaryText}}">
+      <text class="result-summary-label">一句话结论</text>
+      <text class="result-summary-text">{{budgetResult.summaryText}}</text>
+    </view>
+    <view class="result-actions" wx:if="{{budgetResult.valid}}">
+      <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
+    </view>
     <view class="result-grid">
       <view class="metric main"><text>可贷本金</text><text>{{budgetResult.principal}}</text></view>
       <view class="metric"><text>{{budgetResult.primaryLabel}}</text><text>{{budgetResult.primaryPayment}}</text></view>
       <view class="metric"><text>总利息</text><text>{{budgetResult.totalInterest}}</text></view>
       <view class="metric"><text>还款总额</text><text>{{budgetResult.totalPayment}}</text></view>
+    </view>
     </view>
   </view>
 
@@ -225,7 +262,15 @@
       <text class="{{actualForm.claimedRateMode == 'monthly' ? 'active' : ''}}" data-form="actualForm" data-field="claimedRateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
     </view>
     <text class="field-hint" wx:if="{{actualForm.inputMode == 'interest'}}">只知总利息只能按等额月供折算；尾款贷和先息后本必须填写实际还款结构。</text>
-    <view class="form-error" wx:if="{{actualResult.error}}">{{actualResult.error}}</view>
+    <view class="{{actualResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{actualResult.error}}">{{actualResult.error}}</view>
+    <view class="result-block">
+    <view class="result-summary" wx:if="{{actualResult.summaryText}}">
+      <text class="result-summary-label">一句话结论</text>
+      <text class="result-summary-text">{{actualResult.summaryText}}</text>
+    </view>
+    <view class="result-actions" wx:if="{{actualResult.valid}}">
+      <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
+    </view>
     <view class="result-grid">
       <view class="metric main"><text>真实月利率</text><text>{{actualResult.monthlyRate}}</text></view>
       <view class="metric"><text>含费月利率</text><text>{{actualResult.feeAdjustedMonthlyRate}}</text></view>
@@ -237,6 +282,7 @@
       <view class="metric"><text>{{actualResult.comparisonLabelPrefix}}月息差</text><text>{{actualResult.claimedMonthlyGap}}</text></view>
       <view class="metric"><text>总利息</text><text>{{actualResult.totalInterest}}</text></view>
       <view class="metric"><text>总融资成本</text><text>{{actualResult.totalFinancingCost}}</text></view>
+    </view>
     </view>
   </view>
 
@@ -265,13 +311,22 @@
       <text class="{{flatForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="flatForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">平息月费率%</text>
     </view>
     <text class="field-hint">平息按原始本金全期计费，真实资金占用会逐月减少。</text>
-    <view class="form-error" wx:if="{{flatResult.error}}">{{flatResult.error}}</view>
+    <view class="{{flatResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{flatResult.error}}">{{flatResult.error}}</view>
+    <view class="result-block">
+    <view class="result-summary" wx:if="{{flatResult.summaryText}}">
+      <text class="result-summary-label">一句话结论</text>
+      <text class="result-summary-text">{{flatResult.summaryText}}</text>
+    </view>
+    <view class="result-actions" wx:if="{{flatResult.valid}}">
+      <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
+    </view>
     <view class="result-grid">
       <view class="metric main"><text>平息月供</text><text>{{flatResult.monthlyPayment}}</text></view>
       <view class="metric"><text>真实月利率</text><text>{{flatResult.actualMonthlyRate}}</text></view>
       <view class="metric"><text>名义年化</text><text>{{flatResult.actualAnnualNominalRate}}</text></view>
       <view class="metric"><text>复利年化</text><text>{{flatResult.actualAnnualEffectiveRate}}</text></view>
       <view class="metric"><text>总利息</text><text>{{flatResult.totalInterest}}</text></view>
+    </view>
     </view>
   </view>
 
@@ -305,12 +360,21 @@
     <view class="quick-row">
       <text wx:for="{{balloonRatioOptions}}" wx:key="*this" data-form="balloonForm" data-field="balloonRatio" data-value="{{item}}" bindtap="setFormValue">尾款{{item}}%</text>
     </view>
+    <text class="ratio-amount-hint" wx:if="{{balloonRatioAmountHint}}">{{balloonRatioAmountHint}}</text>
     <view class="field">
       <text class="label">尾款{{balloonForm.balloonRatio ? balloonForm.balloonRatio + '%' : '金额'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="自定义尾款金额" type="digit" value="{{balloonForm.balloonAmount}}" data-form="balloonForm" data-field="balloonAmount" bindinput="onInput" />
       <text class="unit">{{balloonForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
-    <view class="form-error" wx:if="{{balloonResult.error}}">{{balloonResult.error}}</view>
+    <view class="{{balloonResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{balloonResult.error}}">{{balloonResult.error}}</view>
+    <view class="result-block">
+    <view class="result-summary" wx:if="{{balloonResult.summaryText}}">
+      <text class="result-summary-label">一句话结论</text>
+      <text class="result-summary-text">{{balloonResult.summaryText}}</text>
+    </view>
+    <view class="result-actions" wx:if="{{balloonResult.valid}}">
+      <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
+    </view>
     <view class="result-grid">
       <view class="metric main"><text>月供</text><text>{{balloonResult.monthlyPayment}}</text></view>
       <view class="metric"><text>末期还款(含尾款)</text><text>{{balloonResult.lastPayment}}</text></view>
@@ -318,6 +382,7 @@
       <view class="metric"><text>还款总额</text><text>{{balloonResult.totalPayment}}</text></view>
       <view class="metric"><text>等额本息月供</text><text>{{balloonResult.normalMonthly}}</text></view>
       <view class="metric"><text>等额本息总利息</text><text>{{balloonResult.normalInterest}}</text></view>
+    </view>
     </view>
   </view>
 
@@ -384,7 +449,15 @@
       <text class="{{prepayForm.reduceMode == 'payment' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="payment" bindtap="setFormValue">降低月供</text>
     </view>
     <text class="field-hint">默认按最近一期还款完成后立即提前还款估算，不包含两个还款日之间的按日利息。</text>
-    <view class="form-error" wx:if="{{prepayResult.error}}">{{prepayResult.error}}</view>
+    <view class="{{prepayResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{prepayResult.error}}">{{prepayResult.error}}</view>
+    <view class="result-block">
+    <view class="result-summary" wx:if="{{prepayResult.summaryText}}">
+      <text class="result-summary-label">一句话结论</text>
+      <text class="result-summary-text">{{prepayResult.summaryText}}</text>
+    </view>
+    <view class="result-actions" wx:if="{{prepayResult.valid}}">
+      <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
+    </view>
     <view class="result-grid">
       <view class="metric"><text>当前剩余本金</text><text>{{prepayResult.remainingBalance}}</text></view>
       <view class="metric"><text>还后本金</text><text>{{prepayResult.afterPrepayBalance}}</text></view>
@@ -395,26 +468,28 @@
       <view class="metric"><text>原月供</text><text>{{prepayResult.oldMonthlyPayment}}</text></view>
       <view class="metric"><text>新月供</text><text>{{prepayResult.newMonthlyPayment}}</text></view>
     </view>
+    </view>
   </view>
 
-  <view class="schedule" wx:if="{{activeSchedulePreview.length}}">
+  <view class="schedule" wx:if="{{scheduleTotalCount}}">
     <view class="schedule-head">
       <text class="schedule-title">还款明细</text>
       <view class="schedule-meta">
         <picker mode="date" fields="month" value="{{scheduleStartYm}}" bindchange="setScheduleStart">
           <text class="schedule-pill">{{scheduleStartYm ? '首期 ' + scheduleStartYm : '设首期年月'}}</text>
         </picker>
-        <text class="schedule-count">共 {{activeSchedulePreview.length}} 期</text>
+        <text class="schedule-count">共 {{scheduleTotalCount}} 期</text>
         <button class="schedule-action share" open-type="share">分享</button>
         <button class="schedule-action export" bindtap="exportSchedulePdf">导出PDF</button>
       </view>
     </view>
+    <text class="schedule-truncate-note" wx:if="{{scheduleTruncated}}">页面仅展示前 12 期，完整明细请导出 PDF</text>
     <scroll-view class="table-scroll" scroll-x>
       <view class="table-inner">
         <view class="table-head">
           <text>月份</text><text>还款</text><text>本金</text><text>利息</text><text>余额</text>
         </view>
-        <view class="table-row" wx:for="{{activeSchedulePreview}}" wx:key="month">
+        <view class="table-row" wx:for="{{activeScheduleDisplay}}" wx:key="month">
           <text>{{item.label}}</text>
           <text>{{item.payment}}</text>
           <text>{{item.principal}}</text>

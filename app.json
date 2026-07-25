@@ -4,9 +4,9 @@
   ],
   "window": {
     "navigationBarTitleText": "云鑫真实贷款计算器",
-    "navigationBarBackgroundColor": "#f4f8ff",
-    "navigationBarTextStyle": "black",
-    "backgroundColor": "#f4f8ff"
+    "navigationBarBackgroundColor": "#0b1f44",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#eef2f7"
   },
   "style": "v2",
   "lazyCodeLoading": "requiredComponents",

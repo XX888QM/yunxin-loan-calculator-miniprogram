@@ -42,12 +42,10 @@ function moneyFromCents(value) {
 }
 
 function formatMoney(value) {
+  // 金额只保留两位小数，不用千分位逗号（国内习惯看小数点）
   var rounded = round(toNumber(value), 2)
   if (rounded === 0) rounded = 0
-  var fixed = rounded.toFixed(2)
-  var parts = fixed.split('.')
-  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-  return parts.join('.')
+  return rounded.toFixed(2)
 }
 
 function formatPercent(value, digits) {

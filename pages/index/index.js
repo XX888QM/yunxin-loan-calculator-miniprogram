@@ -123,23 +123,24 @@ function unitSwitchPatch(formName, form, newUnit) {
 function parseNumberField(value, label, options) {
   options = options || {}
   if (isBlank(value)) {
-    return { valid: false, error: `请输入${label}` }
+    // 空着还没填：提示，不是报错
+    return { valid: false, error: `请输入${label}`, level: 'hint' }
   }
   const n = rawNumber(value)
   if (!Number.isFinite(n)) {
-    return { valid: false, error: `${label}格式不正确` }
+    return { valid: false, error: `${label}格式不正确`, level: 'error' }
   }
   if (options.integer && !Number.isInteger(n)) {
-    return { valid: false, error: `${label}必须是整数` }
+    return { valid: false, error: `${label}必须是整数`, level: 'error' }
   }
   if (options.min !== undefined && n < options.min) {
-    return { valid: false, error: `${label}不能小于${options.min}` }
+    return { valid: false, error: `${label}不能小于${options.min}`, level: 'error' }
   }
   if (options.max !== undefined && n > options.max) {
-    return { valid: false, error: `${label}不能大于${options.max}` }
+    return { valid: false, error: `${label}不能大于${options.max}`, level: 'error' }
   }
   if (options.positive && n <= 0) {
-    return { valid: false, error: `${label}必须大于0` }
+    return { valid: false, error: `${label}必须大于0`, level: 'error' }
   }
   return { valid: true, value: n }
 }
@@ -196,6 +197,96 @@ const TOOL_OPTIONS = {
     { value: 'budget', label: '能贷多少' },
     { value: 'prepay', label: '提前还款' }
   ]
+}
+
+const SCHEDULE_PREVIEW_LIMIT = 12
+
+const TOOL_HINTS = {
+  payment: '算每月还多少、一共多少利息。',
+  actual: '已有合同月供时，反推真实利率；销售报“月息”时也可用。',
+  flat: '销售说“月息 0.xx%”且按原始本金全期计费时用这里。',
+  balloon: '低月供加大尾款方案，可对比普通等额本息。',
+  combo: '商贷+公积金一起算；两边默认同期限、同还款方式。',
+  budget: '按每月最多能还多少，反推大概能贷多少。',
+  prepay: '估算提前还一笔后能省多少利息（扣违约金后）。'
+}
+
+function buildSampleForms(loanType) {
+  if (loanType === 'home') {
+    return {
+      paymentForm: {
+        principal: '100', months: '360', annualRate: '3.1', rateMode: 'annual',
+        method: 'equalInstallment', unit: 'wan', inputMode: 'loan',
+        carPrice: '', downRatio: '', downPayment: ''
+      },
+      comboForm: {
+        commercialPrincipal: '80', commercialRate: '3.45', fundPrincipal: '40', fundRate: '2.85',
+        years: '30', rateMode: 'annual', method: 'equalInstallment', unit: 'wan'
+      },
+      budgetForm: {
+        monthlyBudget: '8000', months: '360', annualRate: '3.1',
+        rateMode: 'annual', method: 'equalInstallment'
+      },
+      prepayForm: {
+        principal: '100', months: '360', annualRate: '3.1', rateMode: 'annual',
+        paidMonths: '36', prepayAmount: '10', method: 'equalInstallment',
+        currentBalance: '', reduceMode: 'term', penaltyMode: 'percent',
+        penaltyPercent: '', penaltyAmount: '', unit: 'wan'
+      }
+    }
+  }
+  return {
+    paymentForm: {
+      principal: '200000', months: '36', annualRate: '13.14', rateMode: 'annual',
+      method: 'equalInstallment', unit: 'yuan', inputMode: 'loan',
+      carPrice: '', downRatio: '', downPayment: ''
+    },
+    actualForm: {
+      principal: '200000', months: '36', monthlyPayment: '6750', totalInterest: '',
+      inputMode: 'payment', paymentStructure: 'equalPayment', balloonAmount: '',
+      upfrontFee: '', claimedMonthlyRate: '0.59', claimedRateMode: 'monthly', unit: 'yuan'
+    },
+    flatForm: {
+      principal: '200000', months: '36', monthlyFlatRate: '0.59',
+      rateMode: 'monthly', unit: 'yuan'
+    },
+    balloonForm: {
+      principal: '200000', months: '36', annualRate: '13.14', rateMode: 'annual',
+      balloonRatio: '40', balloonAmount: '', unit: 'yuan'
+    }
+  }
+}
+
+function amountHintText(yuanValue, unit) {
+  if (!Number.isFinite(yuanValue) || yuanValue < 0) return ''
+  if (unit === 'wan') return editableNumber(yuanValue / 10000) + ' 万'
+  return money(yuanValue) + ' 元'
+}
+
+function downRatioAmountHint(form) {
+  if (!form || form.inputMode !== 'price' || !form.downRatio || isBlank(form.carPrice)) return ''
+  const price = amount(form.carPrice, form.unit)
+  if (!(price > 0)) return ''
+  const down = price * loan.toNumber(form.downRatio) / 100
+  return '按比例约 ' + amountHintText(down, form.unit)
+}
+
+function balloonRatioAmountHint(form) {
+  if (!form || !form.balloonRatio || isBlank(form.principal)) return ''
+  const principal = amount(form.principal, form.unit)
+  if (!(principal > 0)) return ''
+  const balloon = principal * loan.toNumber(form.balloonRatio) / 100
+  return '按比例约 ' + amountHintText(balloon, form.unit)
+}
+
+function sliceScheduleDisplay(rows) {
+  const list = rows || []
+  return {
+    full: list,
+    display: list.slice(0, SCHEDULE_PREVIEW_LIMIT),
+    total: list.length,
+    truncated: list.length > SCHEDULE_PREVIEW_LIMIT
+  }
 }
 
 const SHARE_INFO = {
@@ -301,7 +392,13 @@ Page({
     balloonResult: {},
     prepayResult: {},
     scheduleStartYm: '',
-    activeSchedulePreview: []
+    activeSchedulePreview: [],
+    activeScheduleDisplay: [],
+    scheduleTotalCount: 0,
+    scheduleTruncated: false,
+    toolHint: TOOL_HINTS.payment,
+    downRatioAmountHint: '',
+    balloonRatioAmountHint: ''
   },
 
   onLoad() {
@@ -464,6 +561,27 @@ Page({
     })
   },
 
+  fillSample() {
+    const activeTool = this.data.activeTool
+    const samples = buildSampleForms(this.data.loanType)
+    const formMap = {
+      payment: 'paymentForm',
+      combo: 'comboForm',
+      budget: 'budgetForm',
+      actual: 'actualForm',
+      flat: 'flatForm',
+      balloon: 'balloonForm',
+      prepay: 'prepayForm'
+    }
+    const formName = formMap[activeTool]
+    const sample = samples[formName]
+    if (!formName || !sample) {
+      wx.showToast({ title: '当前工具暂无示例', icon: 'none' })
+      return
+    }
+    this.setData({ [formName]: sample }, () => this.recalculate())
+  },
+
   recalculate() {
     const tools = {
       payment: { builder: 'buildPaymentResult', result: 'paymentResult' },
@@ -477,9 +595,16 @@ Page({
     const activeTool = this.data.activeTool
     const config = tools[activeTool] || tools.payment
     const result = this[config.builder]()
+    const schedule = sliceScheduleDisplay(result.schedulePreview || [])
     this.setData({
       [config.result]: result,
-      activeSchedulePreview: result.schedulePreview || []
+      activeSchedulePreview: schedule.full,
+      activeScheduleDisplay: schedule.display,
+      scheduleTotalCount: schedule.total,
+      scheduleTruncated: schedule.truncated,
+      toolHint: TOOL_HINTS[activeTool] || '',
+      downRatioAmountHint: downRatioAmountHint(this.data.paymentForm),
+      balloonRatioAmountHint: balloonRatioAmountHint(this.data.balloonForm)
     })
   },
 
@@ -487,9 +612,11 @@ Page({
     const form = this.data.paymentForm
     const context = this.loanContextLines()
     const primaryLabel = form.method === 'equalPrincipal' ? '首月月供' : '每月月供'
-    const invalid = (error) => ({
+    const invalid = (error, level) => ({
       valid: false,
       error,
+      errorLevel: level || 'error',
+      summaryText: '',
       primaryLabel,
       primaryPayment: '—',
       loanAmount: '—',
@@ -503,24 +630,24 @@ Page({
 
     const maxMonths = this.data.loanType === 'car' ? 120 : 600
     const term = parseNumberField(form.months, '还款期数', { integer: true, min: 1, max: maxMonths })
-    if (!term.valid) return invalid(term.error)
+    if (!term.valid) return invalid(term.error, term.level)
     const rate = parseNumberField(form.annualRate, rateLabel(form.rateMode), { min: 0 })
-    if (!rate.valid) return invalid(rate.error)
+    if (!rate.valid) return invalid(rate.error, rate.level)
 
     let principal
     let carPrice = 0
     let downPayment = 0
     if (form.inputMode === 'price') {
       const price = parseNumberField(form.carPrice, this.data.loanType === 'car' ? '车价' : '房价', { positive: true })
-      if (!price.valid) return invalid(price.error)
+      if (!price.valid) return invalid(price.error, price.level)
       carPrice = amount(form.carPrice, form.unit)
       if (form.downRatio) {
         const ratio = parseNumberField(form.downRatio, '首付比例', { min: 0, max: 100 })
-        if (!ratio.valid) return invalid(ratio.error)
+        if (!ratio.valid) return invalid(ratio.error, ratio.level)
         downPayment = carPrice * ratio.value / 100
       } else {
         const customDown = parseOptionalNumber(form.downPayment, '首付金额', { min: 0 })
-        if (!customDown.valid) return invalid(customDown.error)
+        if (!customDown.valid) return invalid(customDown.error, customDown.level)
         downPayment = amount(customDown.empty ? 0 : form.downPayment, form.unit)
       }
       if (downPayment > carPrice) return invalid('首付不能超过总价')
@@ -528,7 +655,7 @@ Page({
       if (principal <= 0) return invalid('贷款本金必须大于0')
     } else {
       const principalField = parseNumberField(form.principal, '贷款本金', { positive: true })
-      if (!principalField.valid) return invalid(principalField.error)
+      if (!principalField.valid) return invalid(principalField.error, principalField.level)
       principal = amount(form.principal, form.unit)
     }
 
@@ -550,6 +677,8 @@ Page({
     return {
       valid: true,
       error: '',
+      errorLevel: '',
+      summaryText: primaryLabel + ' ' + money(primaryPayment) + ' 元，总利息 ' + money(result.totalInterest) + ' 元',
       primaryLabel,
       primaryPayment: money(primaryPayment),
       loanAmount: money(result.principal),
@@ -565,9 +694,11 @@ Page({
   buildComboResult() {
     const form = this.data.comboForm
     const context = this.loanContextLines()
-    const invalid = (error) => ({
+    const invalid = (error, level) => ({
       valid: false,
       error,
+      errorLevel: level || 'error',
+      summaryText: '',
       primaryPayment: '—',
       lastPayment: '—',
       totalInterest: '—',
@@ -577,22 +708,22 @@ Page({
     })
 
     const years = parseNumberField(form.years, '贷款年限', { integer: true, min: 1, max: 50 })
-    if (!years.valid) return invalid(years.error)
+    if (!years.valid) return invalid(years.error, years.level)
     const commercial = parseOptionalNumber(form.commercialPrincipal, '商贷本金', { min: 0 })
     const fund = parseOptionalNumber(form.fundPrincipal, '公积金本金', { min: 0 })
-    if (!commercial.valid) return invalid(commercial.error)
-    if (!fund.valid) return invalid(fund.error)
+    if (!commercial.valid) return invalid(commercial.error, commercial.level)
+    if (!fund.valid) return invalid(fund.error, fund.level)
     const commercialPrincipal = amount(commercial.empty ? 0 : form.commercialPrincipal, form.unit)
     const fundPrincipal = amount(fund.empty ? 0 : form.fundPrincipal, form.unit)
-    if (commercialPrincipal <= 0 && fundPrincipal <= 0) return invalid('请输入商贷本金或公积金本金')
+    if (commercialPrincipal <= 0 && fundPrincipal <= 0) return invalid('请输入商贷本金或公积金本金', 'hint')
 
     if (commercialPrincipal > 0) {
       const commercialRateField = parseNumberField(form.commercialRate, '商贷利率', { min: 0 })
-      if (!commercialRateField.valid) return invalid(commercialRateField.error)
+      if (!commercialRateField.valid) return invalid(commercialRateField.error, commercialRateField.level)
     }
     if (fundPrincipal > 0) {
       const fundRateField = parseNumberField(form.fundRate, '公积金利率', { min: 0 })
-      if (!fundRateField.valid) return invalid(fundRateField.error)
+      if (!fundRateField.valid) return invalid(fundRateField.error, fundRateField.level)
     }
 
     const months = years.value * 12
@@ -618,6 +749,8 @@ Page({
     return {
       valid: true,
       error: '',
+      errorLevel: '',
+      summaryText: '合计月供 ' + money(primaryPayment) + ' 元，总利息 ' + money(result.totalInterest) + ' 元',
       primaryPayment: money(primaryPayment),
       lastPayment: money(result.lastPayment),
       totalInterest: money(result.totalInterest),
@@ -631,9 +764,11 @@ Page({
     const form = this.data.budgetForm
     const context = this.loanContextLines()
     const primaryLabel = form.method === 'equalPrincipal' ? '首月最高月供' : '每月月供'
-    const invalid = (error) => ({
+    const invalid = (error, level) => ({
       valid: false,
       error,
+      errorLevel: level || 'error',
+      summaryText: '',
       principal: '—',
       primaryLabel,
       primaryPayment: '—',
@@ -644,11 +779,11 @@ Page({
     })
 
     const budget = parseNumberField(form.monthlyBudget, '月供预算', { positive: true })
-    if (!budget.valid) return invalid(budget.error)
+    if (!budget.valid) return invalid(budget.error, budget.level)
     const term = parseNumberField(form.months, '还款期数', { integer: true, min: 1, max: 600 })
-    if (!term.valid) return invalid(term.error)
+    if (!term.valid) return invalid(term.error, term.level)
     const rate = parseNumberField(form.annualRate, rateLabel(form.rateMode), { min: 0 })
-    if (!rate.valid) return invalid(rate.error)
+    if (!rate.valid) return invalid(rate.error, rate.level)
 
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
     const result = loan.calcAffordableLoan(budget.value, annualRate, term.value, form.method)
@@ -666,6 +801,8 @@ Page({
     return {
       valid: true,
       error: '',
+      errorLevel: '',
+      summaryText: '大约可贷 ' + money(result.principal) + ' 元，' + primaryLabel + ' ' + money(primaryPayment) + ' 元',
       principal: money(result.principal),
       primaryLabel,
       primaryPayment: money(primaryPayment),
@@ -680,9 +817,11 @@ Page({
     const form = this.data.actualForm
     const paymentStructure = form.paymentStructure || 'equalPayment'
     const context = this.loanContextLines()
-    const invalid = (error) => ({
+    const invalid = (error, level) => ({
       valid: false,
       error,
+      errorLevel: level || 'error',
+      summaryText: '',
       monthlyRate: '—',
       annualNominalRate: '—',
       annualEffectiveRate: '—',
@@ -699,13 +838,13 @@ Page({
     })
 
     const principalField = parseNumberField(form.principal, '贷款本金', { positive: true })
-    if (!principalField.valid) return invalid(principalField.error)
+    if (!principalField.valid) return invalid(principalField.error, principalField.level)
     const term = parseNumberField(form.months, '还款期数', { integer: true, min: 1, max: 600 })
-    if (!term.valid) return invalid(term.error)
+    if (!term.valid) return invalid(term.error, term.level)
     const upfront = parseOptionalNumber(form.upfrontFee, '前置费用', { min: 0 })
-    if (!upfront.valid) return invalid(upfront.error)
+    if (!upfront.valid) return invalid(upfront.error, upfront.level)
     const claimed = parseOptionalNumber(form.claimedMonthlyRate, '对外利率', { min: 0 })
-    if (!claimed.valid) return invalid(claimed.error)
+    if (!claimed.valid) return invalid(claimed.error, claimed.level)
 
     const principal = amount(form.principal, form.unit)
     const upfrontFee = amount(upfront.empty ? 0 : form.upfrontFee, form.unit)
@@ -716,7 +855,7 @@ Page({
     if (form.inputMode === 'interest') {
       if (paymentStructure !== 'equalPayment') return invalid('只知总利息仅适用于等额月供')
       const totalInterestField = parseNumberField(form.totalInterest, '总利息', { min: 0 })
-      if (!totalInterestField.valid) return invalid(totalInterestField.error)
+      if (!totalInterestField.valid) return invalid(totalInterestField.error, totalInterestField.level)
       monthlyPayment = (principal + amount(form.totalInterest, form.unit)) / term.value
     } else {
       const paymentField = parseNumberField(
@@ -724,12 +863,12 @@ Page({
         paymentStructure === 'interestOnly' ? '每期利息' : '实际月供',
         { min: 0 }
       )
-      if (!paymentField.valid) return invalid(paymentField.error)
+      if (!paymentField.valid) return invalid(paymentField.error, paymentField.level)
       monthlyPayment = paymentField.value
 
       if (paymentStructure === 'balloon') {
         const balloon = parseNumberField(form.balloonAmount, '末期尾款', { min: 0 })
-        if (!balloon.valid) return invalid(balloon.error)
+        if (!balloon.valid) return invalid(balloon.error, balloon.level)
         const balloonAmount = amount(form.balloonAmount, form.unit)
         if (balloonAmount > principal) return invalid('末期尾款不能超过贷款本金')
         options.balloon = balloonAmount
@@ -777,9 +916,19 @@ Page({
       `总融资成本：${money(result.totalFinancingCost)} 元`
     ]).join('\n')
 
+    const showAnnual = upfrontFee > 0 ? result.feeAdjustedAnnualNominalRate : result.annualNominalRate
+    const showAnnualLabel = upfrontFee > 0 ? '含费名义年化' : '名义年化'
+    let actualSummary = '真实月利率 ' + percent(result.monthlyRate, 4) + '，' + showAnnualLabel + ' ' + percent(showAnnual, 2)
+    if (claimedFilled) {
+      actualSummary += '，约为对外口径的 ' + loan.round(result.claimedMultiple, 2) + ' 倍'
+    }
+    actualSummary += '；总融资成本 ' + money(result.totalFinancingCost) + ' 元'
+
     return {
       valid: true,
       error: '',
+      errorLevel: '',
+      summaryText: actualSummary,
       monthlyRate: percent(result.monthlyRate, 4),
       annualNominalRate: percent(result.annualNominalRate, 2),
       annualEffectiveRate: percent(result.annualEffectiveRate, 2),
@@ -799,9 +948,11 @@ Page({
   buildFlatResult() {
     const form = this.data.flatForm
     const context = this.loanContextLines()
-    const invalid = (error) => ({
+    const invalid = (error, level) => ({
       valid: false,
       error,
+      errorLevel: level || 'error',
+      summaryText: '',
       monthlyPayment: '—',
       totalInterest: '—',
       totalPayment: '—',
@@ -812,11 +963,11 @@ Page({
     })
 
     const principalField = parseNumberField(form.principal, '贷款本金', { positive: true })
-    if (!principalField.valid) return invalid(principalField.error)
+    if (!principalField.valid) return invalid(principalField.error, principalField.level)
     const term = parseNumberField(form.months, '还款期数', { integer: true, min: 1, max: 120 })
-    if (!term.valid) return invalid(term.error)
+    if (!term.valid) return invalid(term.error, term.level)
     const rate = parseNumberField(form.monthlyFlatRate, '平息费率', { min: 0 })
-    if (!rate.valid) return invalid(rate.error)
+    if (!rate.valid) return invalid(rate.error, rate.level)
 
     const monthlyFlatRate = asMonthlyFlatRate(form.monthlyFlatRate, form.rateMode)
     const result = loan.calcFlatMonthly(amount(form.principal, form.unit), monthlyFlatRate, term.value)
@@ -834,6 +985,8 @@ Page({
     return {
       valid: true,
       error: '',
+      errorLevel: '',
+      summaryText: '平息月供 ' + money(result.monthlyPayment) + ' 元，真实名义年化约 ' + percent(result.actualAnnualNominalRate, 2),
       monthlyPayment: money(result.monthlyPayment),
       totalInterest: money(result.totalInterest),
       totalPayment: money(result.totalPayment),
@@ -847,9 +1000,11 @@ Page({
   buildBalloonResult() {
     const form = this.data.balloonForm
     const context = this.loanContextLines()
-    const invalid = (error) => ({
+    const invalid = (error, level) => ({
       valid: false,
       error,
+      errorLevel: level || 'error',
+      summaryText: '',
       monthlyPayment: '—',
       balloonAmount: '—',
       lastPayment: '—',
@@ -862,21 +1017,21 @@ Page({
     })
 
     const principalField = parseNumberField(form.principal, '贷款本金', { positive: true })
-    if (!principalField.valid) return invalid(principalField.error)
+    if (!principalField.valid) return invalid(principalField.error, principalField.level)
     const term = parseNumberField(form.months, '还款期数', { integer: true, min: 1, max: 120 })
-    if (!term.valid) return invalid(term.error)
+    if (!term.valid) return invalid(term.error, term.level)
     const rate = parseNumberField(form.annualRate, rateLabel(form.rateMode), { min: 0 })
-    if (!rate.valid) return invalid(rate.error)
+    if (!rate.valid) return invalid(rate.error, rate.level)
 
     const principal = amount(form.principal, form.unit)
     let balloonAmount
     if (form.balloonRatio) {
       const ratio = parseNumberField(form.balloonRatio, '尾款比例', { min: 0, max: 100 })
-      if (!ratio.valid) return invalid(ratio.error)
+      if (!ratio.valid) return invalid(ratio.error, ratio.level)
       balloonAmount = principal * ratio.value / 100
     } else {
       const balloon = parseOptionalNumber(form.balloonAmount, '尾款金额', { min: 0 })
-      if (!balloon.valid) return invalid(balloon.error)
+      if (!balloon.valid) return invalid(balloon.error, balloon.level)
       balloonAmount = amount(balloon.empty ? 0 : form.balloonAmount, form.unit)
     }
     if (balloonAmount > principal) return invalid('尾款不能超过贷款本金')
@@ -897,6 +1052,8 @@ Page({
     return {
       valid: true,
       error: '',
+      errorLevel: '',
+      summaryText: '月供 ' + money(result.monthlyPayment) + ' 元，末期含尾款 ' + money(result.lastPayment) + ' 元',
       monthlyPayment: money(result.monthlyPayment),
       balloonAmount: money(result.balloonAmount),
       lastPayment: money(result.lastPayment),
@@ -912,9 +1069,11 @@ Page({
   buildPrepayResult() {
     const form = this.data.prepayForm
     const context = this.loanContextLines()
-    const invalid = (error) => ({
+    const invalid = (error, level) => ({
       valid: false,
       error,
+      errorLevel: level || 'error',
+      summaryText: '',
       remainingBalance: '—',
       afterPrepayBalance: '—',
       oldRemainingInterest: '—',
@@ -932,21 +1091,21 @@ Page({
     })
 
     const principalField = parseNumberField(form.principal, '贷款本金', { positive: true })
-    if (!principalField.valid) return invalid(principalField.error)
+    if (!principalField.valid) return invalid(principalField.error, principalField.level)
     const term = parseNumberField(form.months, '总期数', { integer: true, min: 1, max: 600 })
-    if (!term.valid) return invalid(term.error)
+    if (!term.valid) return invalid(term.error, term.level)
     const rate = parseNumberField(form.annualRate, rateLabel(form.rateMode), { min: 0 })
-    if (!rate.valid) return invalid(rate.error)
+    if (!rate.valid) return invalid(rate.error, rate.level)
     const paid = parseNumberField(form.paidMonths, '已还期数', { integer: true, min: 0, max: term.value })
-    if (!paid.valid) return invalid(paid.error)
+    if (!paid.valid) return invalid(paid.error, paid.level)
     const prepay = parseNumberField(form.prepayAmount, '提前还款金额', { positive: true })
-    if (!prepay.valid) return invalid(prepay.error)
+    if (!prepay.valid) return invalid(prepay.error, prepay.level)
     const currentBalanceField = parseOptionalNumber(form.currentBalance, '当前剩余本金', { positive: true })
-    if (!currentBalanceField.valid) return invalid(currentBalanceField.error)
+    if (!currentBalanceField.valid) return invalid(currentBalanceField.error, currentBalanceField.level)
     const penaltyField = form.penaltyMode === 'amount'
       ? parseOptionalNumber(form.penaltyAmount, '违约金额', { min: 0 })
       : parseOptionalNumber(form.penaltyPercent, '违约金比例', { min: 0 })
-    if (!penaltyField.valid) return invalid(penaltyField.error)
+    if (!penaltyField.valid) return invalid(penaltyField.error, penaltyField.level)
 
     const principal = amount(form.principal, form.unit)
     const currentBalance = currentBalanceField.empty
@@ -979,9 +1138,14 @@ Page({
       `新月供：${money(result.newMonthlyPayment)} 元`
     ]).join('\n')
 
+    const prepaySummary = result.netSaved < 0
+      ? '扣违约金后不划算，净亏约 ' + money(Math.abs(result.netSaved)) + ' 元'
+      : '扣违约金后净省约 ' + money(result.netSaved) + ' 元'
     return {
       valid: true,
       error: '',
+      errorLevel: '',
+      summaryText: prepaySummary,
       remainingBalance: money(result.remainingBalance),
       afterPrepayBalance: money(result.afterPrepayBalance),
       oldRemainingInterest: money(result.oldRemainingInterest),

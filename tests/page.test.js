@@ -124,12 +124,12 @@ page.data.paymentForm = {
   downPayment: ''
 }
 const priceResult = page.buildPaymentResult()
-assert.strictEqual(priceResult.loanAmount, '349,600.00')
+assert.strictEqual(priceResult.loanAmount, '349600.00')
 assert.ok(priceResult.copyText.includes('车价'))
 
 page.data.paymentForm.downRatio = ''
 page.data.paymentForm.downPayment = '87000'
-assert.strictEqual(page.buildPaymentResult().loanAmount, '350,000.00')
+assert.strictEqual(page.buildPaymentResult().loanAmount, '350000.00')
 
 // 联动：点比例清自定义额，输自定义额清比例
 page.setFormValue({ currentTarget: { dataset: { form: 'paymentForm', field: 'downRatio', value: '30' } } })
@@ -178,7 +178,7 @@ page.data.prepayForm = {
   unit: 'yuan'
 }
 const prepayRes = page.buildPrepayResult()
-assert.strictEqual(prepayRes.penalty, '1,500.00')
+assert.strictEqual(prepayRes.penalty, '1500.00')
 assert.strictEqual(prepayRes.netSavedNegative, false)
 assert.ok(prepayRes.copyText.includes('净省'))
 
@@ -197,7 +197,7 @@ page.data.balloonForm = {
   unit: 'yuan'
 }
 const balloonRes = page.buildBalloonResult()
-assert.ok(balloonRes.copyText.includes('尾款：80,000.00 元'))
+assert.ok(balloonRes.copyText.includes('尾款：80000.00 元'))
 assert.ok(parseFloat(balloonRes.monthlyPayment.replace(/,/g, '')) < parseFloat(balloonRes.normalMonthly.replace(/,/g, '')))
 assert.ok(balloonRes.schedulePreview.length === 36)
 
@@ -237,7 +237,7 @@ assert.ok(wxml.includes('>分享</button>'))
 assert.ok(wxml.includes('>导出PDF</button>'))
 
 const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 'utf8')
-assert.ok(wxss.includes('grid-template-columns: 128rpx 148rpx 148rpx 148rpx 148rpx'))
+assert.ok(wxss.includes('grid-template-columns: 108rpx 1fr 1fr 1fr 1fr'))
 assert.ok(wxss.includes('width: 76rpx'))
 assert.ok(wxss.includes('width: 132rpx'))
 
@@ -314,9 +314,9 @@ page.data.prepayForm = {
 }
 const equalPrincipalPrepay = page.buildPrepayResult()
 assert.strictEqual(equalPrincipalPrepay.valid, true)
-assert.strictEqual(equalPrincipalPrepay.remainingBalance, '666,666.67')
+assert.strictEqual(equalPrincipalPrepay.remainingBalance, '666666.67')
 page.data.prepayForm.currentBalance = '70'
-assert.strictEqual(page.buildPrepayResult().remainingBalance, '700,000.00')
+assert.strictEqual(page.buildPrepayResult().remainingBalance, '700000.00')
 
 
 // 其他表单的万元/元切换也必须保持实际金额
@@ -387,7 +387,7 @@ page.data.paymentForm = {
   carPrice: '', downRatio: '', downPayment: ''
 }
 assert.strictEqual(page.buildPaymentResult().valid, true)
-assert.strictEqual(page.buildPaymentResult().primaryPayment, '10,000.00')
+assert.strictEqual(page.buildPaymentResult().primaryPayment, '10000.00')
 
 page.data.paymentForm = {
   principal: '', months: '36', annualRate: '7.08', rateMode: 'annual',
@@ -396,6 +396,7 @@ page.data.paymentForm = {
 }
 assert.strictEqual(page.buildPaymentResult().valid, false)
 assert.ok(page.buildPaymentResult().error.includes('首付'))
+assert.strictEqual(page.buildPaymentResult().errorLevel, 'error')
 
 page.data.balloonForm = {
   principal: '200000', months: '36', annualRate: '14.4', rateMode: 'annual',
@@ -403,6 +404,28 @@ page.data.balloonForm = {
 }
 assert.strictEqual(page.buildBalloonResult().valid, false)
 assert.ok(page.buildBalloonResult().error.includes('尾款'))
+assert.strictEqual(page.buildBalloonResult().errorLevel, 'error')
+
+// 空表单只做灰色提示，不当成红色报错
+page.data.paymentForm = {
+  principal: '', months: '', annualRate: '', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan', inputMode: 'loan',
+  carPrice: '', downRatio: '', downPayment: ''
+}
+const emptyPayment = page.buildPaymentResult()
+assert.strictEqual(emptyPayment.valid, false)
+assert.ok(emptyPayment.error.includes('请输入'))
+assert.strictEqual(emptyPayment.errorLevel, 'hint')
+
+page.data.paymentForm = {
+  principal: '100000', months: 'abc', annualRate: '7', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan', inputMode: 'loan',
+  carPrice: '', downRatio: '', downPayment: ''
+}
+const badMonths = page.buildPaymentResult()
+assert.strictEqual(badMonths.valid, false)
+assert.ok(badMonths.error.includes('整数') || badMonths.error.includes('格式'))
+assert.strictEqual(badMonths.errorLevel, 'error')
 
 
 // 页面显示的明细合计必须与结果区汇总完全一致
@@ -455,5 +478,46 @@ const latestWxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wx
 assert.ok(latestWxml.includes('月利率%'))
 assert.ok(latestWxml.includes('名义年化'))
 assert.ok(latestWxml.includes('当前剩余本金'))
+assert.ok(latestWxml.includes('一键示例'))
+assert.ok(latestWxml.includes('一句话结论'))
+assert.ok(latestWxml.includes('activeScheduleDisplay'))
+assert.ok(latestWxml.includes('bindtap="fillSample"'))
+assert.ok(latestWxml.includes('result-copy-btn'))
+assert.ok(!latestWxml.includes('class="copy-btn"'))
+
+// 一键示例只填当前工具表单，不改计算口径；算月供数字与引擎一致
+page.setLoanType({ currentTarget: { dataset: { value: 'car' } } })
+page.switchTool({ currentTarget: { dataset: { tool: 'payment' } } })
+page.fillSample()
+assert.strictEqual(page.data.paymentForm.principal, '200000')
+assert.strictEqual(page.data.paymentForm.months, '36')
+assert.strictEqual(page.data.paymentResult.valid, true)
+assert.ok(page.data.paymentResult.summaryText.includes('月供'))
+assert.ok(page.data.paymentResult.summaryText.includes('总利息'))
+const loanEngine = require('../utils/loan')
+const enginePayment = loanEngine.calculateByMethod(200000, 13.14, 36, 'equalInstallment')
+assert.strictEqual(page.data.paymentResult.primaryPayment, loanEngine.formatMoney(enginePayment.monthlyPayment))
+assert.strictEqual(page.data.paymentResult.totalInterest, loanEngine.formatMoney(enginePayment.totalInterest))
+assert.strictEqual(page.data.scheduleTotalCount, 36)
+assert.strictEqual(page.data.activeScheduleDisplay.length, 12)
+assert.strictEqual(page.data.activeSchedulePreview.length, 36)
+assert.strictEqual(page.data.scheduleTruncated, true)
+
+// 首付比例即时显示金额（展示层，不改贷款额计算）
+page.setFormValue({
+  currentTarget: { dataset: { form: 'paymentForm', field: 'inputMode', value: 'price' } }
+})
+page.setFormValue({
+  currentTarget: { dataset: { form: 'paymentForm', field: 'unit', value: 'wan' } }
+})
+page.onInput({
+  currentTarget: { dataset: { form: 'paymentForm', field: 'carPrice' } },
+  detail: { value: '20' }
+})
+page.setFormValue({
+  currentTarget: { dataset: { form: 'paymentForm', field: 'downRatio', value: '30' } }
+})
+assert.ok(page.data.downRatioAmountHint.includes('6'))
+assert.strictEqual(page.data.paymentResult.loanAmount, '140000.00')
 
 console.log('page checks passed')

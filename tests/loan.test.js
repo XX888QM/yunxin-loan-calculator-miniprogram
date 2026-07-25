@@ -235,5 +235,8 @@ assert.strictEqual(loan.round(-1.005, 2), -1.01)
 assert.strictEqual(loan.round(2.675, 2), 2.68)
 assert.strictEqual(loan.round(-2.675, 2), -2.68)
 assert.strictEqual(loan.formatMoney(-0.0001), '0.00')
+assert.strictEqual(loan.formatMoney(6752.28), '6752.28')
+assert.strictEqual(loan.formatMoney(195437.72), '195437.72')
+assert.ok(!loan.formatMoney(1000000).includes(','))
 
 console.log('loan calculator checks passed')
