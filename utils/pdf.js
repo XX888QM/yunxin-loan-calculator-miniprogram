@@ -108,11 +108,8 @@ function pageContent(options, rows, pageIndex, pageCount) {
   return content
 }
 
-function createSchedulePdf(options) {
-  options = options || {}
-  var rows = options.rows || []
-  var rowsPerPage = 34
-  var pageCount = Math.max(1, Math.ceil(rows.length / rowsPerPage))
+function createPdfDocument(pageContents) {
+  pageContents = Array.isArray(pageContents) && pageContents.length ? pageContents : ['']
   var objects = []
   var pageIds = []
 
@@ -122,9 +119,8 @@ function createSchedulePdf(options) {
   objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
   objects[5] = ''
 
-  for (var p = 0; p < pageCount; p += 1) {
-    var pageRows = rows.slice(p * rowsPerPage, (p + 1) * rowsPerPage)
-    var content = pageContent(options, pageRows, p, pageCount)
+  for (var p = 0; p < pageContents.length; p += 1) {
+    var content = pageContents[p]
     var contentId = objects.length
     objects[contentId] = '<< /Length ' + content.length + ' >>\nstream\n' + content + 'endstream'
 
@@ -156,6 +152,151 @@ function createSchedulePdf(options) {
   return toArrayBuffer(pdf)
 }
 
+function createSchedulePdf(options) {
+  options = options || {}
+  var rows = options.rows || []
+  var rowsPerPage = 34
+  var pageCount = Math.max(1, Math.ceil(rows.length / rowsPerPage))
+  var pages = []
+
+  for (var p = 0; p < pageCount; p += 1) {
+    var pageRows = rows.slice(p * rowsPerPage, (p + 1) * rowsPerPage)
+    pages.push(pageContent(options, pageRows, p, pageCount))
+  }
+
+  return createPdfDocument(pages)
+}
+
+function safeReportText(value, maxLength) {
+  if (value === undefined || value === null) return ''
+  return String(value)
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ')
+    .trim()
+    .slice(0, maxLength)
+}
+
+function wrapReportText(value, maxChars) {
+  var text = safeReportText(value, 480)
+  if (!text) return []
+  var sourceLines = text.split('\n')
+  var lines = []
+
+  for (var i = 0; i < sourceLines.length; i += 1) {
+    var source = sourceLines[i].trim()
+    if (!source) continue
+    while (source.length > maxChars) {
+      lines.push(source.slice(0, maxChars))
+      source = source.slice(maxChars)
+    }
+    if (source) lines.push(source)
+  }
+  return lines
+}
+
+function reportTextList(value, maxItems) {
+  var source = Array.isArray(value) ? value : [value]
+  var result = []
+  for (var i = 0; i < source.length && result.length < maxItems; i += 1) {
+    var text = safeReportText(source[i], 240)
+    if (text) result.push(text)
+  }
+  return result
+}
+
+function reportCostList(value) {
+  var result = []
+  var i
+  if (Array.isArray(value)) {
+    for (i = 0; i < value.length && result.length < 60; i += 1) {
+      var item = value[i]
+      if (item && typeof item === 'object') {
+        var label = safeReportText(item.label, 60)
+        var amount = safeReportText(item.value, 80)
+        if (label || amount) result.push((label || '成本') + '：' + (amount || '—'))
+      } else {
+        var text = safeReportText(item, 160)
+        if (text) result.push(text)
+      }
+    }
+    return result
+  }
+
+  if (value && typeof value === 'object') {
+    var keys = Object.keys(value)
+    for (i = 0; i < keys.length && result.length < 60; i += 1) {
+      var key = safeReportText(keys[i], 60)
+      var itemValue = safeReportText(value[keys[i]], 80)
+      if (key || itemValue) result.push((key || '成本') + '：' + (itemValue || '—'))
+    }
+  }
+  return result
+}
+
+function addReportSection(lines, title, values) {
+  lines.push({ type: 'section', text: title })
+  if (!values.length) {
+    lines.push({ type: 'body', text: '未填写' })
+    return
+  }
+  for (var i = 0; i < values.length; i += 1) {
+    var wrapped = wrapReportText(values[i], 42)
+    for (var j = 0; j < wrapped.length; j += 1) {
+      lines.push({ type: 'body', text: (j === 0 ? '• ' : '  ') + wrapped[j] })
+    }
+  }
+}
+
+function buildReportLines(report) {
+  report = report || {}
+  var lines = []
+  addReportSection(lines, '关键结论', reportTextList(report.conclusion || report.summary, 4))
+  addReportSection(lines, '成本', reportCostList(report.costs || report.amounts))
+  addReportSection(lines, '核对项', reportTextList(report.checks, 60))
+  addReportSection(lines, '假设说明', reportTextList(report.assumptions || report.assumption, 20))
+  return lines
+}
+
+function quoteReportPageContent(title, lines, pageIndex, pageCount) {
+  var content = ''
+  var pageTitle = title + (pageIndex > 0 ? '（续）' : '')
+  content += cjkLine(16, 40, 800, pageTitle)
+  content += cjkLine(8, 40, 782, '本地测算报告')
+  content += cjkLine(8, 450, 782, '页码：' + (pageIndex + 1) + '/' + pageCount)
+
+  var y = 758
+  for (var i = 0; i < lines.length; i += 1) {
+    var line = lines[i]
+    var isSection = line.type === 'section'
+    content += cjkLine(isSection ? 10 : 9, isSection ? 40 : 54, y, line.text)
+    y -= isSection ? 22 : 18
+  }
+
+  content += cjkLine(8, 40, 36, '本报告由小程序本地生成，测算结果仅供参考。')
+  return content
+}
+
+function createQuoteReportPdf(report) {
+  report = report || {}
+  var title = safeReportText(report.title, 80) || '贷款测算报告'
+  var lines = buildReportLines(report)
+  var linesPerPage = 30
+  var pageCount = Math.max(1, Math.ceil(lines.length / linesPerPage))
+  var pages = []
+
+  for (var i = 0; i < pageCount; i += 1) {
+    pages.push(quoteReportPageContent(
+      title,
+      lines.slice(i * linesPerPage, (i + 1) * linesPerPage),
+      i,
+      pageCount
+    ))
+  }
+
+  return createPdfDocument(pages)
+}
+
 module.exports = {
-  createSchedulePdf: createSchedulePdf
+  createSchedulePdf: createSchedulePdf,
+  createQuoteReportPdf: createQuoteReportPdf
 }

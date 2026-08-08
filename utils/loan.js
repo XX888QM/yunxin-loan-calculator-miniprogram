@@ -476,15 +476,21 @@ function calcBalloonLoan(principal, annualRatePercent, months, balloonAmount) {
   return result
 }
 
-function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
+function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths, options) {
+  options = options || {}
   var schedule = []
   var currentCents = toCents(balance)
   var paymentCents = toCents(payment)
   maxMonths = normalizeMonths(maxMonths || 600)
+  var forceFinalBalance = options.forceFinalBalance !== false
 
   for (var i = 1; i <= maxMonths && currentCents > 0; i += 1) {
     var interestCents = Math.round(currentCents * monthlyRate)
-    var principalCents = i === maxMonths ? currentCents : paymentCents - interestCents
+    // 默认路径保留旧接口的末期结清行为；精确提前还款会显式关闭它，
+    // 从而不会把不足的自定义月供伪装成最后一期一次性结清。
+    var principalCents = i === maxMonths && forceFinalBalance
+      ? currentCents
+      : paymentCents - interestCents
     if (principalCents <= 0) break
     principalCents = Math.min(currentCents, principalCents)
     var rowPaymentCents = principalCents + interestCents
@@ -495,16 +501,17 @@ function calcFixedPaymentSchedule(balance, monthlyRate, payment, maxMonths) {
   return schedule
 }
 
-function calcFixedPrincipalSchedule(balance, monthlyRate, principalPayment, maxMonths) {
+function calcFixedPrincipalSchedule(balance, monthlyRate, principalPayment, maxMonths, options) {
+  options = options || {}
   var schedule = []
   var currentCents = toCents(balance)
   var principalPaymentCents = Math.max(1, toCents(principalPayment))
   maxMonths = normalizeMonths(maxMonths || 600)
+  var forceFinalBalance = options.forceFinalBalance !== false
 
   for (var i = 1; i <= maxMonths && currentCents > 0; i += 1) {
-    var principalCents = i === maxMonths
-      ? currentCents
-      : Math.min(currentCents, principalPaymentCents)
+    var principalCents = Math.min(currentCents, principalPaymentCents)
+    if (i === maxMonths && forceFinalBalance) principalCents = currentCents
     var interestCents = Math.round(currentCents * monthlyRate)
     var paymentCents = principalCents + interestCents
     currentCents = Math.max(0, currentCents - principalCents)
@@ -610,6 +617,677 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
   }
 }
 
+// 二期接口使用严格输入校验，避免把空值或错误文本静默当成金额 0。
+function explicitNumber(value, fallback) {
+  if (!hasExplicitValue(value)) return fallback
+  return toNumber(value, NaN)
+}
+
+function validMonthsInput(value) {
+  var months = explicitNumber(value, NaN)
+  return Number.isFinite(months) && Math.round(months) === months && months >= 1 && months <= MAX_MONTHS
+}
+
+function invalidCalculation(error) {
+  return { valid: false, error: error }
+}
+
+function calculateFinancingSchedule(principal, annualRate, months, method, balloonAmount) {
+  if (method === 'balloon' || toCents(balloonAmount) > 0) {
+    return calcBalloonLoan(principal, annualRate, months, balloonAmount)
+  }
+  return calculateByMethod(principal, annualRate, months, method)
+}
+
+// 综合融资成本：必须区分费用是现金另付还是从放款中代扣，避免把同一笔费用算两遍。
+function calcComprehensiveFinancing(options) {
+  options = options || {}
+  var rawPrincipal = explicitNumber(options.principal, NaN)
+  var rawAnnualRate = explicitNumber(options.annualRate, NaN)
+  var method = options.method || 'equalInstallment'
+  var rawUpfrontFee = explicitNumber(options.upfrontFee, 0)
+  var rawPeriodicFee = explicitNumber(options.periodicFee, 0)
+  var hasPurposeFunding = hasExplicitValue(options.purposeFunding)
+  var rawPurposeFunding = hasPurposeFunding
+    ? explicitNumber(options.purposeFunding, NaN)
+    : rawPrincipal
+  var rawBalloon = explicitNumber(options.balloonAmount, 0)
+  var upfrontFeePayment = options.upfrontFeePayment || options.upfrontFeeMode ||
+    (hasPurposeFunding && rawPurposeFunding < rawPrincipal ? 'deducted' : 'cash')
+
+  if (!Number.isFinite(rawPrincipal) || rawPrincipal <= 0) return invalidCalculation('invalidPrincipal')
+  if (!validMonthsInput(options.months)) return invalidCalculation('invalidMonths')
+  if (!Number.isFinite(rawAnnualRate) || rawAnnualRate < 0) return invalidCalculation('invalidAnnualRate')
+  if (!Number.isFinite(rawUpfrontFee) || rawUpfrontFee < 0) return invalidCalculation('invalidUpfrontFee')
+  if (!Number.isFinite(rawPeriodicFee) || rawPeriodicFee < 0) return invalidCalculation('invalidPeriodicFee')
+  if (method !== 'equalInstallment' && method !== 'equalPrincipal' &&
+    method !== 'interestOnly' && method !== 'balloon') {
+    return invalidCalculation('unsupportedMethod')
+  }
+  if (!Number.isFinite(rawPurposeFunding) || rawPurposeFunding <= 0 || rawPurposeFunding > rawPrincipal) {
+    return invalidCalculation('invalidPurposeFunding')
+  }
+  if (upfrontFeePayment !== 'cash' && upfrontFeePayment !== 'deducted') {
+    return invalidCalculation('invalidUpfrontFeePayment')
+  }
+  if (!Number.isFinite(rawBalloon) || rawBalloon < 0 || rawBalloon > rawPrincipal) {
+    return invalidCalculation('invalidBalloonAmount')
+  }
+
+  var principalCents = toCents(rawPrincipal)
+  var principal = moneyFromCents(principalCents)
+  var annualRate = rawAnnualRate
+  var months = Math.round(options.months)
+  var upfrontFeeCents = toCents(rawUpfrontFee)
+  var periodicFeeCents = toCents(rawPeriodicFee)
+  var purposeFundingCents = toCents(rawPurposeFunding)
+  var balloonAmount = moneyFromCents(toCents(rawBalloon))
+  var nonPurposePrincipalCents = principalCents - purposeFundingCents
+  var deductedUpfrontFeeCents = upfrontFeePayment === 'deducted' ? upfrontFeeCents : 0
+  var cashUpfrontFeeCents = upfrontFeePayment === 'cash' ? upfrontFeeCents : 0
+
+  if (principalCents <= 0) return invalidCalculation('invalidPrincipal')
+  if (purposeFundingCents <= 0) return invalidCalculation('invalidPurposeFunding')
+  if (deductedUpfrontFeeCents > nonPurposePrincipalCents) {
+    return invalidCalculation('deductedFeeExceedsFundingGap')
+  }
+
+  var netFundingCents = purposeFundingCents - cashUpfrontFeeCents
+
+  if (netFundingCents <= 0) return invalidCalculation('invalidNetFunding')
+
+  var contract = calculateFinancingSchedule(
+    principal,
+    annualRate,
+    months,
+    method,
+    balloonAmount
+  )
+  var schedule = []
+  var cashflows = []
+  var totalPeriodicFeeCents = 0
+  var maxPeriodicOutflowCents = 0
+
+  for (var i = 0; i < contract.schedule.length; i += 1) {
+    var row = contract.schedule[i]
+    var cashflowCents = toCents(row.payment) + periodicFeeCents
+    totalPeriodicFeeCents += periodicFeeCents
+    maxPeriodicOutflowCents = Math.max(maxPeriodicOutflowCents, cashflowCents)
+    cashflows.push(moneyFromCents(cashflowCents))
+    schedule.push({
+      month: row.month,
+      payment: row.payment,
+      principal: row.principal,
+      interest: row.interest,
+      balance: row.balance,
+      periodicFee: moneyFromCents(periodicFeeCents),
+      cashflow: moneyFromCents(cashflowCents)
+    })
+  }
+
+  var solved = solveMonthlyRateFromCashflows(moneyFromCents(netFundingCents), cashflows)
+  if (!solved.valid) return invalidCalculation(solved.error)
+
+  var totalRepaymentCents = toCents(contract.totalPayment)
+  var contractInterestCents = toCents(contract.totalInterest)
+  var declaredFinancingFeesCents = upfrontFeeCents + totalPeriodicFeeCents
+  // 合同本金与实际用途资金的差额不一定都是服务费（还可能是加融项目）。
+  // 单独暴露该部分，避免把它从“综合成本”里漏掉或误标成已披露费用。
+  var unallocatedFinancedAmountCents = nonPurposePrincipalCents - deductedUpfrontFeeCents
+  var nonInterestFinancingCostCents = totalRepaymentCents + totalPeriodicFeeCents +
+    cashUpfrontFeeCents - purposeFundingCents - contractInterestCents
+  var totalFinancingCostCents = contractInterestCents + nonInterestFinancingCostCents
+  var maxCashPressureCents = Math.max(maxPeriodicOutflowCents, cashUpfrontFeeCents)
+
+  return {
+    valid: true,
+    error: '',
+    method: contract.method,
+    principal: principal,
+    purposeFunding: moneyFromCents(purposeFundingCents),
+    netFunding: moneyFromCents(netFundingCents),
+    upfrontFee: moneyFromCents(upfrontFeeCents),
+    upfrontFeePayment: upfrontFeePayment,
+    deductedUpfrontFee: moneyFromCents(deductedUpfrontFeeCents),
+    cashUpfrontFee: moneyFromCents(cashUpfrontFeeCents),
+    periodicFee: moneyFromCents(periodicFeeCents),
+    totalPeriodicFee: moneyFromCents(totalPeriodicFeeCents),
+    financingFees: moneyFromCents(declaredFinancingFeesCents),
+    totalFinancingFees: moneyFromCents(declaredFinancingFeesCents),
+    declaredFinancingFees: moneyFromCents(declaredFinancingFeesCents),
+    nonPurposePrincipal: moneyFromCents(nonPurposePrincipalCents),
+    unallocatedFinancedAmount: moneyFromCents(unallocatedFinancedAmountCents),
+    nonInterestFinancingCost: moneyFromCents(nonInterestFinancingCostCents),
+    contractInterest: moneyFromCents(contractInterestCents),
+    totalRepayment: moneyFromCents(totalRepaymentCents),
+    contractTotalRepayment: moneyFromCents(totalRepaymentCents),
+    totalFinancingCost: moneyFromCents(totalFinancingCostCents),
+    monthlyIrr: solved.rate,
+    annualNominalIrr: solved.rate * 12,
+    annualEffectiveIrr: annualEffectiveRate(solved.rate),
+    monthlyRate: solved.rate,
+    annualNominalRate: solved.rate * 12,
+    annualEffectiveRate: annualEffectiveRate(solved.rate),
+    maxPeriodicOutflow: moneyFromCents(maxPeriodicOutflowCents),
+    maxPayment: moneyFromCents(maxPeriodicOutflowCents),
+    maxCashPressure: moneyFromCents(maxCashPressureCents),
+    maxSingleCashOutflow: moneyFromCents(maxCashPressureCents),
+    cashflows: cashflows,
+    schedule: schedule
+  }
+}
+
+function optionNumber(options, names, fallback) {
+  for (var i = 0; i < names.length; i += 1) {
+    if (hasExplicitValue(options[names[i]])) return explicitNumber(options[names[i]], NaN)
+  }
+  return fallback
+}
+
+// 车贷落地价：落地价与融资成本分开，避免把首付或贷款本金重复计入成本。
+function calcCarLandedCost(options) {
+  options = options || {}
+  var financing = options.financing || {}
+  var vehiclePrice = optionNumber(options, ['vehiclePrice', 'carPrice'], NaN)
+  var discount = optionNumber(options, ['discount'], 0)
+  var purchaseTax = optionNumber(options, ['purchaseTax'], 0)
+  var insurance = optionNumber(options, ['insurance'], 0)
+  var registration = optionNumber(options, ['registration', 'registrationFee'], 0)
+  var requiredOptions = optionNumber(options, ['requiredOptions', 'mandatoryOptions'], 0)
+  var purposeFunding = optionNumber(
+    options,
+    ['purposeFunding', 'purchaseFunding', 'actualPurchaseFunding', 'loanAppliedToPurchase'],
+    optionNumber(financing, ['purposeFunding'], 0)
+  )
+  var upfrontFee = optionNumber(
+    options,
+    ['upfrontFee', 'upfrontFinancingFee'],
+    optionNumber(financing, ['upfrontFee'], 0)
+  )
+  var totalRepayment = optionNumber(
+    options,
+    ['totalRepayment', 'contractTotalRepayment'],
+    optionNumber(financing, ['totalRepayment', 'contractTotalRepayment'], 0)
+  )
+  var totalPeriodicFee = optionNumber(
+    options,
+    ['totalPeriodicFee', 'periodicFinancingFee'],
+    optionNumber(financing, ['totalPeriodicFee'], 0)
+  )
+  var upfrontFeePayment = options.upfrontFeePayment || options.upfrontFeeMode ||
+    financing.upfrontFeePayment || financing.upfrontFeeMode || 'cash'
+
+  if (!Number.isFinite(vehiclePrice) || vehiclePrice <= 0) return invalidCalculation('invalidVehiclePrice')
+  if (!Number.isFinite(discount) || discount < 0 || discount > vehiclePrice) return invalidCalculation('invalidDiscount')
+  if (!Number.isFinite(purchaseTax) || purchaseTax < 0) return invalidCalculation('invalidPurchaseTax')
+  if (!Number.isFinite(insurance) || insurance < 0) return invalidCalculation('invalidInsurance')
+  if (!Number.isFinite(registration) || registration < 0) return invalidCalculation('invalidRegistration')
+  if (!Number.isFinite(requiredOptions) || requiredOptions < 0) return invalidCalculation('invalidRequiredOptions')
+  if (!Number.isFinite(purposeFunding) || purposeFunding < 0) return invalidCalculation('invalidPurposeFunding')
+  if (!Number.isFinite(upfrontFee) || upfrontFee < 0) return invalidCalculation('invalidUpfrontFee')
+  if (!Number.isFinite(totalRepayment) || totalRepayment < 0) return invalidCalculation('invalidTotalRepayment')
+  if (!Number.isFinite(totalPeriodicFee) || totalPeriodicFee < 0) return invalidCalculation('invalidPeriodicFee')
+  if (upfrontFeePayment !== 'cash' && upfrontFeePayment !== 'deducted') {
+    return invalidCalculation('invalidUpfrontFeePayment')
+  }
+
+  var vehiclePriceCents = toCents(vehiclePrice)
+  var discountCents = toCents(discount)
+  var purchaseTaxCents = toCents(purchaseTax)
+  var insuranceCents = toCents(insurance)
+  var registrationCents = toCents(registration)
+  var requiredOptionsCents = toCents(requiredOptions)
+  var purposeFundingCents = toCents(purposeFunding)
+  var upfrontFeeCents = toCents(upfrontFee)
+  var totalRepaymentCents = toCents(totalRepayment)
+  var totalPeriodicFeeCents = toCents(totalPeriodicFee)
+  var landedCostCents = vehiclePriceCents - discountCents + purchaseTaxCents + insuranceCents + registrationCents + requiredOptionsCents
+
+  if (vehiclePriceCents <= 0) return invalidCalculation('invalidVehiclePrice')
+  if (purposeFunding > 0 && purposeFundingCents <= 0) return invalidCalculation('invalidPurposeFunding')
+  if (purposeFundingCents > landedCostCents) return invalidCalculation('fundingExceedsLandedCost')
+  if (purposeFundingCents > 0 && totalRepaymentCents + totalPeriodicFeeCents < purposeFundingCents) {
+    return invalidCalculation('invalidTotalRepayment')
+  }
+  if (upfrontFeePayment === 'deducted' && purposeFundingCents > 0 &&
+    totalRepaymentCents < purposeFundingCents + upfrontFeeCents) {
+    return invalidCalculation('deductedFeeNotInContract')
+  }
+  if (purposeFundingCents === 0 && (upfrontFeeCents > 0 || totalRepaymentCents > 0 || totalPeriodicFeeCents > 0)) {
+    return invalidCalculation('invalidFinancingWithoutFunding')
+  }
+
+  var cashUpfrontFeeCents = upfrontFeePayment === 'cash' ? upfrontFeeCents : 0
+  var cashAtPurchaseCents = landedCostCents - purposeFundingCents + cashUpfrontFeeCents
+  var financingCostCents = totalRepaymentCents + totalPeriodicFeeCents + cashUpfrontFeeCents - purposeFundingCents
+  var totalPaidCents = cashAtPurchaseCents + totalRepaymentCents + totalPeriodicFeeCents
+
+  return {
+    valid: true,
+    error: '',
+    vehiclePrice: moneyFromCents(vehiclePriceCents),
+    discount: moneyFromCents(discountCents),
+    purchaseTax: moneyFromCents(purchaseTaxCents),
+    insurance: moneyFromCents(insuranceCents),
+    registration: moneyFromCents(registrationCents),
+    requiredOptions: moneyFromCents(requiredOptionsCents),
+    purposeFunding: moneyFromCents(purposeFundingCents),
+    upfrontFee: moneyFromCents(upfrontFeeCents),
+    upfrontFeePayment: upfrontFeePayment,
+    cashUpfrontFee: moneyFromCents(cashUpfrontFeeCents),
+    totalRepayment: moneyFromCents(totalRepaymentCents),
+    totalPeriodicFee: moneyFromCents(totalPeriodicFeeCents),
+    landedCost: moneyFromCents(landedCostCents),
+    cashAtPurchase: moneyFromCents(cashAtPurchaseCents),
+    financingCost: moneyFromCents(financingCostCents),
+    totalPaid: moneyFromCents(totalPaidCents),
+    equalityDifference: moneyFromCents(totalPaidCents - landedCostCents - financingCostCents)
+  }
+}
+
+function ratePathValue(row, isLpr, spreadBps) {
+  var rate
+  if (isLpr) {
+    if (hasExplicitValue(row.lprBps)) {
+      rate = explicitNumber(row.lprBps, NaN) / 100
+    } else {
+      rate = optionNumber(row, ['lpr', 'lprRate'], NaN)
+    }
+    return rate + spreadBps / 100
+  }
+  if (hasExplicitValue(row.annualRateBps)) return explicitNumber(row.annualRateBps, NaN) / 100
+  return optionNumber(row, ['annualRate', 'rate'], NaN)
+}
+
+function ratePathMonth(row) {
+  return optionNumber(row, ['effectiveMonth', 'month', 'startMonth'], NaN)
+}
+
+function normalizeRatePath(options, months) {
+  var lprPath = Array.isArray(options.lprPath) ? options.lprPath : options.lprEvents
+  var isLpr = Array.isArray(lprPath)
+  var rawPath = isLpr
+    ? lprPath
+    : (Array.isArray(options.ratePath) ? options.ratePath : options.rateEvents)
+  var spreadBps = explicitNumber(options.spreadBps, 0)
+
+  if (!Number.isFinite(spreadBps)) return { valid: false, error: 'invalidSpreadBps' }
+  if (!Array.isArray(rawPath) || !rawPath.length) {
+    if (!isLpr && hasExplicitValue(options.annualRate)) {
+      rawPath = [{ effectiveMonth: 1, annualRate: options.annualRate }]
+    } else {
+      return { valid: false, error: 'invalidRatePath' }
+    }
+  }
+
+  var path = []
+  var lastMonth = 0
+  for (var i = 0; i < rawPath.length; i += 1) {
+    var row = rawPath[i] || {}
+    var month = ratePathMonth(row)
+    var annualRate = ratePathValue(row, isLpr, spreadBps)
+    if (!Number.isFinite(month) || Math.round(month) !== month || month < 1 || month > months || month <= lastMonth) {
+      return { valid: false, error: 'invalidRatePath' }
+    }
+    if (!Number.isFinite(annualRate) || annualRate < 0) return { valid: false, error: 'invalidRatePath' }
+    path.push({ effectiveMonth: month, annualRate: annualRate })
+    lastMonth = month
+  }
+
+  if (path[0].effectiveMonth !== 1) return { valid: false, error: 'invalidRatePath' }
+  return { valid: true, path: path, ratePathType: isLpr ? 'lpr' : 'annualRate' }
+}
+
+function ratePathAtMonth(path, month) {
+  var current = path[0]
+  for (var i = 1; i < path.length; i += 1) {
+    if (path[i].effectiveMonth > month) break
+    current = path[i]
+  }
+  return current
+}
+
+function isRateChange(path, month) {
+  for (var i = 0; i < path.length; i += 1) {
+    if (path[i].effectiveMonth === month) return true
+  }
+  return false
+}
+
+// 分段利率还款表。等额本息在改价期首按剩余本金和剩余期数重算月供。
+function calcRatePathSchedule(options) {
+  options = options || {}
+  var rawPrincipal = explicitNumber(options.principal, NaN)
+  var method = options.method || 'equalInstallment'
+
+  if (!Number.isFinite(rawPrincipal) || rawPrincipal <= 0) return invalidCalculation('invalidPrincipal')
+  if (!validMonthsInput(options.months)) return invalidCalculation('invalidMonths')
+  if (method !== 'equalInstallment' && method !== 'equalPrincipal') {
+    return invalidCalculation('unsupportedMethod')
+  }
+
+  var months = Math.round(options.months)
+  var principalCents = toCents(rawPrincipal)
+  if (principalCents <= 0) return invalidCalculation('invalidPrincipal')
+  var pathResult = normalizeRatePath(options, months)
+  if (!pathResult.valid) return invalidCalculation(pathResult.error)
+
+  var path = pathResult.path
+  var principal = moneyFromCents(principalCents)
+  var balanceCents = principalCents
+  var schedule = []
+  var paymentChanges = []
+  var paymentCents = 0
+  var repaidPrincipalCents = 0
+
+  for (var month = 1; month <= months; month += 1) {
+    var rate = ratePathAtMonth(path, month)
+    var monthlyRate = monthlyRateFromAnnual(rate.annualRate)
+    var interestCents = Math.round(balanceCents * monthlyRate)
+    var principalPartCents
+    var rowPaymentCents
+
+    if (method === 'equalPrincipal') {
+      var cumulativePrincipalCents = month === months
+        ? principalCents
+        : Math.round(principalCents * month / months)
+      principalPartCents = cumulativePrincipalCents - repaidPrincipalCents
+      rowPaymentCents = principalPartCents + interestCents
+      repaidPrincipalCents = cumulativePrincipalCents
+    } else {
+      if (month === 1 || isRateChange(path, month)) {
+        var remainingMonths = months - month + 1
+        var theoreticalPayment = isZeroRate(monthlyRate)
+          ? moneyFromCents(balanceCents) / remainingMonths
+          : moneyFromCents(balanceCents) * monthlyRate * Math.pow(1 + monthlyRate, remainingMonths) /
+            (Math.pow(1 + monthlyRate, remainingMonths) - 1)
+        paymentCents = toCents(theoreticalPayment)
+      }
+
+      if (month === months) {
+        principalPartCents = balanceCents
+        rowPaymentCents = principalPartCents + interestCents
+      } else {
+        principalPartCents = paymentCents - interestCents
+        if (principalPartCents <= 0) principalPartCents = Math.min(balanceCents, 1)
+        principalPartCents = Math.min(balanceCents, principalPartCents)
+        rowPaymentCents = principalPartCents + interestCents
+      }
+    }
+
+    balanceCents = Math.max(0, balanceCents - principalPartCents)
+    schedule.push(scheduleRow(month, rowPaymentCents, principalPartCents, interestCents, balanceCents))
+    if (isRateChange(path, month)) {
+      paymentChanges.push({
+        effectiveMonth: month,
+        annualRate: rate.annualRate,
+        monthlyPayment: moneyFromCents(rowPaymentCents)
+      })
+    }
+  }
+
+  var result = baseResult(principal, path[0].annualRate, months, method, schedule)
+  result.valid = true
+  result.error = ''
+  result.ratePath = path
+  // annualRate 保持首段利率，额外字段明确这是按月重定价的手工情景，不是实时 LPR 报价。
+  result.initialAnnualRate = path[0].annualRate
+  result.finalAnnualRate = path[path.length - 1].annualRate
+  result.ratePathType = pathResult.ratePathType
+  result.isRateScenario = true
+  result.repricingUnit = 'month'
+  result.paymentChanges = paymentChanges
+  return result
+}
+
+function parseYmdDate(value) {
+  if (!hasExplicitValue(value)) return null
+  var match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+  var year = Number(match[1])
+  var month = Number(match[2])
+  var day = Number(match[3])
+  var utc = Date.UTC(year, month - 1, day)
+  var date = new Date(utc)
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null
+  return { year: year, month: month, day: day, utc: utc }
+}
+
+function isLastDayOfFebruary(date) {
+  return date.month === 2 && date.day === new Date(Date.UTC(date.year, 2, 0)).getUTCDate()
+}
+
+function thirty360Days(start, end) {
+  // 采用常见的 30/360 US（NASD）约定；合同若写明其他 30/360 变体，应以合同为准。
+  var startIsFebruaryEnd = isLastDayOfFebruary(start)
+  var endIsFebruaryEnd = isLastDayOfFebruary(end)
+  var startDay = start.day === 31 || startIsFebruaryEnd ? 30 : start.day
+  var endDay = end.day
+  if (endIsFebruaryEnd && startIsFebruaryEnd) endDay = 30
+  if (endDay === 31 && startDay === 30) endDay = 30
+  return (end.year - start.year) * 360 + (end.month - start.month) * 30 + endDay - startDay
+}
+
+function accrualInfo(balanceCents, annualRate, options) {
+  var settlementInterest = explicitNumber(options.settlementInterest, NaN)
+  if (Number.isFinite(settlementInterest)) {
+    if (settlementInterest < 0) return { valid: false, error: 'invalidSettlementInterest' }
+    return {
+      valid: true,
+      precisionMode: 'statement',
+      dayCount: '',
+      dayCountConvention: '',
+      days: 0,
+      interestCents: toCents(settlementInterest)
+    }
+  }
+  if (hasExplicitValue(options.settlementInterest)) return { valid: false, error: 'invalidSettlementInterest' }
+
+  var start = parseYmdDate(options.lastSettledDate)
+  var end = parseYmdDate(options.prepayDate)
+  var dayCount = options.dayCount || 'ACT_365F'
+  if (!start || !end) return { valid: false, error: 'missingAccrualDate' }
+  if (end.utc < start.utc) return { valid: false, error: 'invalidAccrualDate' }
+  if (dayCount !== 'ACT_365F' && dayCount !== 'ACT_360' && dayCount !== '30_360') {
+    return { valid: false, error: 'invalidDayCount' }
+  }
+
+  var days = dayCount === '30_360'
+    ? thirty360Days(start, end)
+    : Math.round((end.utc - start.utc) / 86400000)
+  var denominator = dayCount === 'ACT_360' || dayCount === '30_360' ? 360 : 365
+  var interest = moneyFromCents(balanceCents) * annualRate / 100 * days / denominator
+  return {
+    valid: true,
+    precisionMode: 'dailyEstimate',
+    dayCount: dayCount,
+    dayCountConvention: dayCount === '30_360' ? '30_360_US' : dayCount,
+    days: days,
+    interestCents: toCents(interest)
+  }
+}
+
+function penaltyCentsForPrepayment(balanceCents, prepayCents, options) {
+  var type = options.penaltyType || (options.penalty && options.penalty.type) || 'fixed'
+  var value = hasExplicitValue(options.penaltyValue)
+    ? explicitNumber(options.penaltyValue, NaN)
+    : (options.penalty && hasExplicitValue(options.penalty.value)
+      ? explicitNumber(options.penalty.value, NaN)
+      : 0)
+  if (!Number.isFinite(value) || value < 0) return { valid: false, error: 'invalidPenalty' }
+  if (type === 'fixed') return { valid: true, cents: toCents(value) }
+  if (type === 'percentOfPrepay') {
+    return { valid: true, cents: toCents(fromCents(prepayCents) * value / 100) }
+  }
+  if (type === 'percentOfBalance') {
+    return { valid: true, cents: toCents(fromCents(balanceCents) * value / 100) }
+  }
+  return { valid: false, error: 'invalidPenaltyType' }
+}
+
+function scheduleIsPaidOff(schedule) {
+  return schedule.length > 0 && toCents(schedule[schedule.length - 1].balance) === 0
+}
+
+function exactBaseSchedule(balance, annualRate, months, method, options) {
+  var rate = monthlyRateFromAnnual(annualRate)
+  if (method === 'equalPrincipal') {
+    if (hasExplicitValue(options.principalPayment)) {
+      var principalPayment = explicitNumber(options.principalPayment, NaN)
+      if (!Number.isFinite(principalPayment) || principalPayment <= 0) return { valid: false, error: 'invalidPrincipalPayment' }
+      var fixedPrincipal = calcFixedPrincipalSchedule(balance, rate, principalPayment, months, {
+        forceFinalBalance: false
+      })
+      if (!scheduleIsPaidOff(fixedPrincipal)) return { valid: false, error: 'paymentInsufficient' }
+      if (fixedPrincipal.length !== months) return { valid: false, error: 'paymentTermMismatch' }
+      return { valid: true, schedule: fixedPrincipal }
+    }
+    return { valid: true, schedule: calcEqualPrincipal(balance, annualRate, months).schedule }
+  }
+
+  if (hasExplicitValue(options.monthlyPayment)) {
+    var payment = explicitNumber(options.monthlyPayment, NaN)
+    if (!Number.isFinite(payment) || payment <= 0) return { valid: false, error: 'invalidMonthlyPayment' }
+    var fixedPayment = calcFixedPaymentSchedule(balance, rate, payment, months, {
+      forceFinalBalance: false
+    })
+    if (!scheduleIsPaidOff(fixedPayment)) return { valid: false, error: 'paymentInsufficient' }
+    if (fixedPayment.length !== months) return { valid: false, error: 'paymentTermMismatch' }
+    return { valid: true, schedule: fixedPayment }
+  }
+  return { valid: true, schedule: calcEqualInstallment(balance, annualRate, months).schedule }
+}
+
+// 账单结息 + 后续固定利率计划估算。首版只支持正常等额本息或等额本金。
+function calcExactPrepayment(options) {
+  options = options || {}
+  var rawBalance = explicitNumber(options.remainingPrincipal, NaN)
+  var rawMonths = hasExplicitValue(options.remainingMonths)
+    ? explicitNumber(options.remainingMonths, NaN)
+    : explicitNumber(options.months, NaN)
+  var rawAnnualRate = explicitNumber(options.annualRate, NaN)
+  var rawPrepay = hasExplicitValue(options.prepayPrincipal)
+    ? explicitNumber(options.prepayPrincipal, NaN)
+    : explicitNumber(options.prepayAmount, NaN)
+  var rawBalloon = explicitNumber(options.balloonAmount, 0)
+  var method = options.method || 'equalInstallment'
+  var reduceMode = options.reduceMode || 'term'
+
+  if (options.hasArrears || options.hasOverdue || options.hasSkippedPayment) {
+    return invalidCalculation('unsupportedLoanState')
+  }
+  if (!Number.isFinite(rawBalloon) || rawBalloon < 0) return invalidCalculation('invalidBalloonAmount')
+  if (options.method === 'balloon' || toCents(rawBalloon) > 0) {
+    return invalidCalculation('unsupportedMethod')
+  }
+  if ((Array.isArray(options.ratePath) && options.ratePath.length) ||
+    (Array.isArray(options.rateEvents) && options.rateEvents.length) ||
+    (Array.isArray(options.lprPath) && options.lprPath.length) ||
+    (Array.isArray(options.lprEvents) && options.lprEvents.length)) {
+    return invalidCalculation('unsupportedRatePath')
+  }
+  if (method !== 'equalInstallment' && method !== 'equalPrincipal') {
+    return invalidCalculation('unsupportedMethod')
+  }
+  if ((method === 'equalPrincipal' && hasExplicitValue(options.monthlyPayment)) ||
+    (method === 'equalInstallment' && hasExplicitValue(options.principalPayment))) {
+    return invalidCalculation('unsupportedCustomPayment')
+  }
+  if (reduceMode !== 'term' && reduceMode !== 'payment') return invalidCalculation('invalidReduceMode')
+  if (!Number.isFinite(rawBalance) || rawBalance <= 0) return invalidCalculation('invalidRemainingPrincipal')
+  if (!Number.isFinite(rawMonths) || Math.round(rawMonths) !== rawMonths || rawMonths < 1 || rawMonths > MAX_MONTHS) {
+    return invalidCalculation('invalidRemainingMonths')
+  }
+  if (!Number.isFinite(rawAnnualRate) || rawAnnualRate < 0) return invalidCalculation('invalidAnnualRate')
+  if (!Number.isFinite(rawPrepay) || rawPrepay <= 0) return invalidCalculation('invalidPrepayPrincipal')
+
+  var balanceCents = toCents(rawBalance)
+  var prepayCents = toCents(rawPrepay)
+  if (balanceCents <= 0) return invalidCalculation('invalidRemainingPrincipal')
+  if (prepayCents <= 0) return invalidCalculation('invalidPrepayPrincipal')
+  if (prepayCents > balanceCents) return invalidCalculation('prepayExceedsBalance')
+
+  var months = Math.round(rawMonths)
+  var balance = moneyFromCents(balanceCents)
+  var base = exactBaseSchedule(balance, rawAnnualRate, months, method, options)
+  if (!base.valid) return invalidCalculation(base.error)
+
+  var accrued = accrualInfo(balanceCents, rawAnnualRate, options)
+  if (!accrued.valid) return invalidCalculation(accrued.error)
+  var penalty = penaltyCentsForPrepayment(balanceCents, prepayCents, options)
+  if (!penalty.valid) return invalidCalculation(penalty.error)
+
+  var oldSchedule = base.schedule
+  var oldRemainingMonths = oldSchedule.length
+  var oldRemainingInterestCents = sumScheduleCents(oldSchedule, 'interest')
+  var afterPrepayCents = balanceCents - prepayCents
+  var afterPrepayBalance = moneyFromCents(afterPrepayCents)
+  var newSchedule = []
+
+  if (afterPrepayCents > 0) {
+    if (reduceMode === 'payment') {
+      newSchedule = method === 'equalPrincipal'
+        ? calcEqualPrincipal(afterPrepayBalance, rawAnnualRate, oldRemainingMonths).schedule
+        : calcEqualInstallment(afterPrepayBalance, rawAnnualRate, oldRemainingMonths).schedule
+    } else if (method === 'equalPrincipal') {
+      newSchedule = calcFixedPrincipalSchedule(
+        afterPrepayBalance,
+        monthlyRateFromAnnual(rawAnnualRate),
+        oldSchedule[0].principal,
+        oldRemainingMonths,
+        { forceFinalBalance: false }
+      )
+    } else {
+      newSchedule = calcFixedPaymentSchedule(
+        afterPrepayBalance,
+        monthlyRateFromAnnual(rawAnnualRate),
+        oldSchedule[0].payment,
+        oldRemainingMonths,
+        { forceFinalBalance: false }
+      )
+    }
+    if (!scheduleIsPaidOff(newSchedule)) return invalidCalculation('paymentInsufficient')
+  }
+
+  var newRemainingInterestCents = sumScheduleCents(newSchedule, 'interest')
+  var interestSavedCents = Math.max(0, oldRemainingInterestCents - newRemainingInterestCents)
+  var settlementTotalCents = prepayCents + accrued.interestCents + penalty.cents
+
+  return {
+    valid: true,
+    error: '',
+    precisionMode: accrued.precisionMode,
+    scope: accrued.precisionMode === 'statement'
+      ? 'statementAccrualAndEstimatedFixedRateSchedule'
+      : 'dailyAccrualEstimateAndEstimatedFixedRateSchedule',
+    dayCount: accrued.dayCount,
+    dayCountConvention: accrued.dayCountConvention,
+    accrualDays: accrued.days,
+    method: method,
+    reduceMode: reduceMode,
+    remainingPrincipal: moneyFromCents(balanceCents),
+    remainingBalance: moneyFromCents(balanceCents),
+    prepayPrincipal: moneyFromCents(prepayCents),
+    afterPrepayPrincipal: afterPrepayBalance,
+    afterPrepayBalance: afterPrepayBalance,
+    accruedInterest: moneyFromCents(accrued.interestCents),
+    penalty: moneyFromCents(penalty.cents),
+    settlementTotal: moneyFromCents(settlementTotalCents),
+    oldRemainingInterest: moneyFromCents(oldRemainingInterestCents),
+    newRemainingInterest: moneyFromCents(newRemainingInterestCents),
+    interestSaved: moneyFromCents(interestSavedCents),
+    scheduledInterestSaved: moneyFromCents(interestSavedCents),
+    futureInterestSaved: moneyFromCents(interestSavedCents),
+    netFutureInterestSaved: moneyFromCents(interestSavedCents - penalty.cents),
+    netSaved: moneyFromCents(interestSavedCents - penalty.cents),
+    oldRemainingMonths: oldRemainingMonths,
+    newRemainingMonths: newSchedule.length,
+    oldMonthlyPayment: oldSchedule[0] ? oldSchedule[0].payment : 0,
+    newMonthlyPayment: newSchedule[0] ? newSchedule[0].payment : 0,
+    schedule: newSchedule
+  }
+}
+
 module.exports = {
   toNumber: toNumber,
   round: round,
@@ -626,6 +1304,10 @@ module.exports = {
   calcAffordableLoan: calcAffordableLoan,
   calcBalloonLoan: calcBalloonLoan,
   calcPrepayment: calcPrepayment,
+  calcComprehensiveFinancing: calcComprehensiveFinancing,
+  calcCarLandedCost: calcCarLandedCost,
+  calcRatePathSchedule: calcRatePathSchedule,
+  calcExactPrepayment: calcExactPrepayment,
   inferMonthlyRateFromPayment: inferMonthlyRateFromPayment,
   solveMonthlyRateFromCashflows: solveMonthlyRateFromCashflows
 }

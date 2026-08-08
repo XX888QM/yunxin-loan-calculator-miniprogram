@@ -9,8 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 常用命令
 
 ```bash
-npm test                    # 全部测试 = loan + pdf + page
+npm test                    # 全部测试 = loan + history + pdf + page
 node tests/loan.test.js     # 只跑计算引擎测试
+node tests/history.test.js  # 只跑本机历史记录测试
 node tests/pdf.test.js      # 只跑 PDF 导出测试
 node tests/page.test.js     # 只跑页面逻辑测试
 node --check utils/loan.js  # 语法检查
@@ -33,20 +34,27 @@ node --check utils/loan.js  # 语法检查
 
 ### utils/pdf.js — PDF 导出（零依赖）
 
-- 只生成还款明细 PDF，供页面写入本地临时文件后 `wx.openDocument` 打开。
+- 生成还款明细 PDF 和报价体检报告 PDF，供页面写入本地临时文件后 `wx.openDocument` 打开。
 - 不引入第三方库、不上传数据；PDF 中文用系统 CJK 字体 `STSong-Light` + UCS-2BE，金额/日期/期数用 `Helvetica`，PDF 金额不显示千分位逗号，避免数字被中文字体拉开，也避免嵌入字体导致包体变大。
+
+### utils/history.js — 本机历史（零依赖）
+
+- 只保存白名单内的计算字段和结果摘要，最多 30 条；姓名、电话、身份证、地址、邮箱等内容一律不写入本机历史。
+- 历史仅供用户主动保存的报价体检结果使用，不做自动保存、云同步或后台上传。
 
 ### pages/index/index.js — 单页多工具（ES6：const/箭头函数）
 
 - 每个工具一个 `build*Result()` 方法；页面在调用引擎前显式校验空值、范围、首付/尾款/费用边界，并按 `activeTool` 切换 `activeSchedulePreview`。
 - 首页定义 `onShareAppMessage` / `onShareTimeline` 并在 `onLoad` 调 `wx.showShareMenu`；还款明细区的分享按钮是自愿转发入口，PDF 导出不依赖分享状态。
-- 表单全存 `data.xxxForm`；事件只有三个通用 handler（`onInput`/`setFormValue`/`setMonths`），由 WXML 的 `data-form`/`data-field`/`data-value` 驱动。成对字段的互斥清空写在 handler 里（`downRatio`↔`downPayment`、`balloonRatio`↔`balloonAmount`）。
+- 表单全存 `data.xxxForm`；事件主要通过 `onInput`/`setFormValue`/`setMonths` 处理，由 WXML 的 `data-form`/`data-field`/`data-value` 驱动。成对字段的互斥清空写在 handler 里（`downRatio`↔`downPayment`、`balloonRatio`↔`balloonAmount`）。
+- 首页通过 `screenMode` 在报价体检、历史记录和全部工具间切换；报价体检的费用未知状态只能显示已录入的最低口径，不得进入横向对比。
 - **万/元换算只发生在页面层**：引擎永远收元；单位切换通过 `unitSwitchPatch` 同步转换金额输入，保持实际金额不变；月供/月供预算类字段永远按元、不参与换算。
-- 工具导航按贷款类型过滤：`TOOL_OPTIONS.car`（含尾款贷 balloon）、`TOOL_OPTIONS.home`（含组合贷 combo、能贷多少 budget、提前还款 prepay）；快捷期数同理走 `TERM_OPTIONS`。
+- 工具导航按贷款类型过滤：车贷含尾款贷和落地总价，房贷含组合贷、反推本金、提前还款和 LPR 情景；快捷期数同理走 `TERM_OPTIONS`。
 
 ### WXML/WXSS
 
-- 复用固定类名体系：`field/label/input/unit`、`segmented(.two)`、`quick-row`、`result-grid/metric(.main)`、`panel`。新面板照抄现有结构，不引入新样式体系。
+- 工具页复用 `field/label/input/unit`、`segmented(.two)`、`quick-row`、`result-grid/metric(.main)`、`panel`；报价体检页使用已选定的 `quote-*` 层级，不引入第三方组件或构建依赖。
+- `app.json` 使用 `navigationStyle: custom`；首页、报价、历史、工具页的自定义头部必须预留 `env(safe-area-inset-top)`，不能与状态栏重叠。
 - 品牌资源放在 `assets/`；顶部 logo 使用 `assets/logo.png`，保持小图资源低于微信代码质量建议的 200K。
 - 公开仓库的 `project.config.json` 使用 `touristappid`；真实 AppID 只放本地未提交、且上传包忽略的 `project.private.config.json`。
 - 发布包通过 `project.config.json` 的 `packOptions.ignore` 排除文档、测试、npm 文件、私有配置、Git 文件和其他开发资料；`uploadWithSourceMap` 保持关闭。

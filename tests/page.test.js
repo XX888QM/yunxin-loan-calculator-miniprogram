@@ -1,11 +1,14 @@
 const assert = require('assert')
 const fs = require('fs')
 const path = require('path')
+const packageMetadata = require('../package.json')
 
 let page
 let writtenFile
 let openedFile
 let shareMenuOptions
+let toastOptions
+const localStorage = {}
 global.wx = {
   env: { USER_DATA_PATH: '/tmp' },
   setClipboardData() {},
@@ -23,10 +26,27 @@ global.wx = {
   openDocument(options) {
     openedFile = options
   },
-  showToast() {}
+  getStorageSync(key) {
+    return localStorage[key]
+  },
+  setStorageSync(key, value) {
+    localStorage[key] = value
+  },
+  removeStorageSync(key) {
+    delete localStorage[key]
+  },
+  showToast(options) {
+    toastOptions = options
+  },
+  showModal(options) {
+    options.success({ confirm: true, cancel: false })
+  }
 }
 global.Page = function (config) {
   page = config
+}
+global.getApp = function () {
+  return { globalData: { version: packageMetadata.version } }
 }
 
 require('../pages/index/index.js')
@@ -49,15 +69,16 @@ page.setData = function (patch, callback) {
 }
 
 page.onLoad()
+assert.strictEqual(page.data.appVersion, packageMetadata.version)
 assert.deepStrictEqual(shareMenuOptions.menus, ['shareAppMessage', 'shareTimeline'])
 assert.strictEqual(page.data.loanType, 'car')
-assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '查真利率', '平息换算', '尾款贷'])
+assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '折算利率', '平息换算', '尾款贷', '落地总价'])
 assert.deepStrictEqual(page.data.termOptionList.map((item) => item.label), ['12期', '24期', '36期', '48期', '60期'])
 assert.ok(page.data.paymentResult.copyText.includes('贷款类型：车贷'))
 
 page.setLoanType({ currentTarget: { dataset: { value: 'home' } } })
 assert.strictEqual(page.data.loanType, 'home')
-assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '组合贷', '能贷多少', '提前还款'])
+assert.deepStrictEqual(page.data.toolList.map((item) => item.label), ['算月供', '组合贷', '反推本金', '提前还款', 'LPR情景'])
 assert.deepStrictEqual(page.data.termOptionList.map((item) => item.label), ['5年', '10年', '20年', '30年'])
 
 page.switchTool({ currentTarget: { dataset: { tool: 'combo' } } })
@@ -162,7 +183,7 @@ page.data.actualForm.monthlyPayment = '11816.50'
 page.data.actualForm.upfrontFee = '10000'
 const feeResult = page.buildActualResult()
 assert.ok(parseFloat(feeResult.feeAdjustedMonthlyRate) > parseFloat(feeResult.monthlyRate))
-assert.ok(feeResult.copyText.includes('含费'))
+assert.ok(feeResult.copyText.includes('含已录入费用'))
 
 page.data.prepayForm = {
   principal: '350000',
@@ -237,7 +258,10 @@ assert.ok(wxml.includes('>分享</button>'))
 assert.ok(wxml.includes('>导出PDF</button>'))
 
 const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 'utf8')
-assert.ok(wxss.includes('grid-template-columns: 108rpx 1fr 1fr 1fr 1fr'))
+assert.ok(wxss.includes('grid-template-columns: 106rpx repeat(4, minmax(0, 1fr))'))
+assert.ok(!wxss.includes('width: 1208rpx'))
+assert.ok(wxss.includes('.schedule-meta .field-picker'))
+assert.ok(wxss.includes('flex-wrap: nowrap'))
 assert.ok(wxss.includes('width: 76rpx'))
 assert.ok(wxss.includes('width: 132rpx'))
 
@@ -457,7 +481,8 @@ assert.strictEqual(
 ;(function () {
   const builderNames = [
     'buildPaymentResult', 'buildComboResult', 'buildBudgetResult',
-    'buildActualResult', 'buildFlatResult', 'buildBalloonResult', 'buildPrepayResult'
+    'buildActualResult', 'buildFlatResult', 'buildBalloonResult', 'buildPrepayResult',
+    'buildCarCostResult', 'buildLprResult'
   ]
   const originals = {}
   const calls = []
@@ -519,5 +544,231 @@ page.setFormValue({
 })
 assert.ok(page.data.downRatioAmountHint.includes('6'))
 assert.strictEqual(page.data.paymentResult.loanAmount, '140000.00')
+
+// 四步报价：不能跳过用途、车贷期数上限或还款输入。
+page.data.quoteForm = {
+  purpose: '', principal: '', months: '', structure: 'equalPayment',
+  monthlyPayment: '', balloonAmount: '', feeStatus: 'unknown', upfrontFee: '', periodicFee: '',
+  claimedRate: '', claimedRateMode: 'annual', prepayKnown: ''
+}
+page.data.quoteSelectedPurpose = ''
+page.startQuoteForPurpose({ currentTarget: { dataset: { purpose: 'home' } } })
+assert.strictEqual(page.data.screenMode, 'quote')
+assert.strictEqual(page.data.quoteForm.purpose, 'home')
+assert.strictEqual(page.data.quoteForm.months, '360')
+page.previousQuoteStep()
+assert.strictEqual(page.data.screenMode, 'home')
+page.startQuickCalc()
+assert.strictEqual(page.data.screenMode, 'quote')
+assert.strictEqual(page.data.quoteStep, 1)
+page.nextQuoteStep()
+assert.strictEqual(page.data.quoteStep, 1)
+assert.strictEqual(toastOptions.title, '请先选择用途')
+page.setQuotePurpose({ currentTarget: { dataset: { purpose: 'car' } } })
+assert.strictEqual(page.data.quoteSelectedPurpose, 'car')
+assert.strictEqual(page.data.quoteForm.months, '36')
+page.setQuotePurpose({ currentTarget: { dataset: { purpose: 'home' } } })
+assert.strictEqual(page.data.quoteForm.months, '360')
+page.setQuotePurpose({ currentTarget: { dataset: { purpose: 'car' } } })
+assert.strictEqual(page.data.quoteForm.months, '36')
+page.nextQuoteStep()
+assert.strictEqual(page.data.quoteStep, 2)
+page.data.quoteForm.principal = '200000'
+page.data.quoteForm.months = '121'
+page.nextQuoteStep()
+assert.strictEqual(page.data.quoteStep, 2)
+assert.ok(toastOptions.title.includes('120'))
+page.data.quoteForm.months = '36'
+page.nextQuoteStep()
+assert.strictEqual(page.data.quoteStep, 3)
+page.nextQuoteStep()
+assert.strictEqual(page.data.quoteStep, 3)
+assert.strictEqual(toastOptions.title, '请输入每期还款')
+
+// 未知费用只能给最低口径，不能进入报价对比；确认后可本机保存和导出报告。
+page.data.quoteForm = {
+  purpose: 'car', principal: '200000', months: '36', structure: 'equalPayment',
+  monthlyPayment: '6750', balloonAmount: '', feeStatus: 'unknown', upfrontFee: '', periodicFee: '',
+  claimedRate: '', claimedRateMode: 'annual', prepayKnown: ''
+}
+page.nextQuoteStep()
+assert.strictEqual(page.data.quoteStep, 4)
+const incompleteQuote = page.data.quoteResult
+assert.strictEqual(incompleteQuote.valid, true)
+assert.strictEqual(incompleteQuote.comparable, false)
+assert.ok(incompleteQuote.annualEffectiveRate.startsWith('≥'))
+assert.ok(incompleteQuote.checklist.some((item) => item.includes('费用还未核对')))
+
+page.data.quoteForm.feeStatus = 'known'
+const incompleteKnownFeeQuote = page.buildQuoteResult()
+assert.strictEqual(incompleteKnownFeeQuote.valid, true)
+assert.strictEqual(incompleteKnownFeeQuote.comparable, false)
+assert.ok(incompleteKnownFeeQuote.annualEffectiveRate.startsWith('≥'))
+
+page.data.quoteForm.upfrontFee = '5000'
+page.data.quoteForm.periodicFee = '50'
+page.data.quoteForm.claimedRate = '0.59'
+page.data.quoteForm.claimedRateMode = 'monthly'
+page.data.quoteForm.prepayKnown = 'no'
+const completeQuote = page.buildQuoteResult()
+assert.strictEqual(completeQuote.valid, true)
+assert.strictEqual(completeQuote.comparable, true)
+assert.ok(!completeQuote.annualEffectiveRate.startsWith('≥'))
+assert.ok(completeQuote.raw.totalFinancingCost > 0)
+assert.ok(completeQuote.copyText.includes('费用核对状态：已填写费用'))
+
+page.data.quoteForm.structure = 'unsupported'
+assert.strictEqual(page.buildQuoteResult().valid, false)
+assert.ok(page.buildQuoteResult().error.includes('还款结构'))
+page.data.quoteForm.structure = 'equalPayment'
+page.data.quoteForm.claimedRateMode = 'unsupported'
+assert.strictEqual(page.buildQuoteResult().valid, false)
+assert.ok(page.buildQuoteResult().error.includes('利率口径'))
+page.data.quoteForm.claimedRateMode = 'monthly'
+
+page.data.quoteResult = completeQuote
+page.data.quoteComparisons = []
+page.addQuoteComparison()
+assert.strictEqual(page.data.quoteComparisons.length, 1)
+page.data.quoteResult = Object.assign({}, completeQuote, { purpose: 'home' })
+page.addQuoteComparison()
+assert.strictEqual(page.data.quoteComparisons.length, 1)
+assert.ok(toastOptions.title.includes('不同用途'))
+page.data.quoteResult = completeQuote
+page.addQuoteComparison()
+page.addQuoteComparison()
+assert.strictEqual(page.data.quoteComparisons.length, 1)
+assert.ok(toastOptions.title.includes('已在对比中'))
+page.data.quoteForm.monthlyPayment = '6800'
+page.data.quoteResult = page.buildQuoteResult()
+page.addQuoteComparison()
+page.data.quoteForm.monthlyPayment = '6900'
+page.data.quoteResult = page.buildQuoteResult()
+page.addQuoteComparison()
+assert.strictEqual(page.data.quoteComparisons.length, 3)
+page.data.quoteForm.monthlyPayment = '7000'
+page.data.quoteResult = page.buildQuoteResult()
+page.addQuoteComparison()
+assert.strictEqual(page.data.quoteComparisons.length, 3)
+assert.ok(toastOptions.title.includes('最多同时对比3份'))
+page.removeQuoteComparison({ currentTarget: { dataset: { id: page.data.quoteComparisons[0].id } } })
+assert.strictEqual(page.data.quoteComparisons.length, 2)
+page.saveQuoteReport()
+assert.strictEqual(page.data.quoteHistory.length, 1)
+assert.strictEqual(page.data.quoteHistory[0].rateLabel, '折算年化')
+assert.strictEqual(page.data.quoteHistory[0].costLabel, '已录入成本')
+page.openHistory()
+assert.strictEqual(page.data.screenMode, 'history')
+assert.strictEqual(page.data.quoteHistory.length, 1)
+const savedQuoteId = page.data.quoteHistory[0].id
+page.restoreQuoteHistory({ currentTarget: { dataset: { id: savedQuoteId } } })
+assert.strictEqual(page.data.screenMode, 'quote')
+assert.strictEqual(page.data.quoteStep, 4)
+page.openHistory()
+page.confirmRemoveQuoteHistory({ currentTarget: { dataset: { id: savedQuoteId } } })
+assert.strictEqual(page.data.quoteHistory.length, 0)
+page.openTools()
+assert.strictEqual(page.data.screenMode, 'tools')
+writtenFile = undefined
+openedFile = undefined
+page.exportQuoteReport()
+assert.ok(writtenFile.filePath.endsWith('.pdf'))
+assert.ok(writtenFile.data instanceof ArrayBuffer)
+assert.strictEqual(openedFile.fileType, 'pdf')
+
+// 分期落地价：分期车价与全款车价、代扣费用分别计算，不能重复算首期现金。
+page.data.carCostForm = {
+  unit: 'yuan', cashVehiclePrice: '200000', installmentVehiclePrice: '205000',
+  discount: '5000', purchaseTax: '10000', insurance: '6000', registrationFee: '1000',
+  requiredOptions: '3000', purposeFunding: '150000', totalRepayment: '166000',
+  upfrontFee: '3000', periodicFee: '0', upfrontFeePayment: 'deducted'
+}
+const carCost = page.buildCarCostResult()
+assert.strictEqual(carCost.valid, true)
+assert.ok(Number(carCost.installmentTotal) > Number(carCost.cashTotal))
+assert.ok(carCost.copyText.includes('从放款中代扣'))
+
+// LPR 只做手动情景，不假装实时利率或正式还款计划。
+page.data.lprForm = {
+  principal: '100', months: '360', initialLpr: '3.6', spreadBps: '-30',
+  repriceMonth: '13', scenarioLpr: '3.3', method: 'equalInstallment', unit: 'wan'
+}
+const lprScenario = page.buildLprResult()
+assert.strictEqual(lprScenario.valid, true)
+assert.ok(lprScenario.schedulePreview.length === 360)
+assert.ok(lprScenario.copyText.includes('手动 LPR 情景'))
+
+// 账单结息模式只承诺本期结息已录入，后续计划必须标注为估算。
+page.data.prepayForm = {
+  mode: 'exact', unit: 'yuan', method: 'equalInstallment', remainingPrincipal: '100000',
+  remainingMonths: '24', annualRate: '12', rateMode: 'annual', prepayPrincipal: '20000',
+  settlementMode: 'statement', settlementInterest: '321.23', lastSettledDate: '', prepayDate: '',
+  dayCount: 'ACT_365F', penaltyType: 'percentOfPrepay', penaltyValue: '3', reduceMode: 'payment'
+}
+const exactPrepay = page.buildPrepayResult()
+assert.strictEqual(exactPrepay.valid, true)
+assert.ok(exactPrepay.scopeText.includes('后续还款计划仍按固定利率'))
+assert.ok(exactPrepay.copyText.includes('本次结算预计支付'))
+assert.strictEqual(exactPrepay.penaltyKnown, true)
+page.setFormValue({ currentTarget: { dataset: { form: 'prepayForm', field: 'unit', value: 'wan' } } })
+assert.strictEqual(page.data.prepayForm.penaltyValue, '3')
+
+// 违约金留空时不得把 0 当成已确认，也不得显示确定的“扣违约金后净省”。
+page.data.prepayForm = {
+  mode: 'quick', unit: 'yuan', method: 'equalInstallment', principal: '100000',
+  months: '24', annualRate: '12', rateMode: 'annual', paidMonths: '6',
+  prepayAmount: '20000', currentBalance: '', penaltyMode: 'percent',
+  penaltyPercent: '', penaltyAmount: '', reduceMode: 'payment'
+}
+const unknownPenaltyQuick = page.buildPrepayResult()
+assert.strictEqual(unknownPenaltyQuick.valid, true)
+assert.strictEqual(unknownPenaltyQuick.penaltyKnown, false)
+assert.ok(unknownPenaltyQuick.summaryText.includes('违约金未核对'))
+assert.ok(unknownPenaltyQuick.netSavedLabel.includes('未含违约金'))
+
+page.data.prepayForm = {
+  mode: 'exact', unit: 'yuan', method: 'equalInstallment', remainingPrincipal: '100000',
+  remainingMonths: '24', annualRate: '12', rateMode: 'annual', prepayPrincipal: '20000',
+  settlementMode: 'statement', settlementInterest: '321.23', lastSettledDate: '', prepayDate: '',
+  dayCount: 'ACT_365F', penaltyType: 'percentOfPrepay', penaltyValue: '', reduceMode: 'payment'
+}
+const unknownPenaltyExact = page.buildPrepayResult()
+assert.strictEqual(unknownPenaltyExact.valid, true)
+assert.strictEqual(unknownPenaltyExact.penaltyKnown, false)
+assert.ok(unknownPenaltyExact.scopeText.includes('违约金尚未核对'))
+
+const upgradedWxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
+assert.ok(upgradedWxml.includes('quote-compare-add'))
+assert.ok(upgradedWxml.includes('purpose-card-car'))
+assert.ok(upgradedWxml.includes('purpose-card-home'))
+assert.ok(!upgradedWxml.includes('purpose-image-wrap'))
+assert.ok(!upgradedWxml.includes('quote-next-arrow'))
+assert.ok(upgradedWxml.includes('quote-prepay-label'))
+assert.ok(upgradedWxml.includes('quote-action-back'))
+assert.ok(upgradedWxml.includes('quote-action-next'))
+assert.ok(upgradedWxml.includes('quote-back-home'))
+assert.ok(upgradedWxml.includes("quoteForm.purpose == 'home' ? '例如 360' : '例如 36'"))
+assert.ok(upgradedWxml.includes('quote-result-navigation'))
+assert.ok(upgradedWxml.includes('restoreQuoteHistory'))
+assert.ok(upgradedWxml.includes('confirmClearQuoteHistory'))
+assert.ok(upgradedWxml.includes("disabled=\"{{!quoteResult.comparable}}\""))
+assert.ok(upgradedWxml.includes('费用确认后才能对比'))
+assert.ok(upgradedWxml.includes("activeTool == 'carCost'"))
+assert.ok(upgradedWxml.includes("activeTool == 'lpr'"))
+assert.ok(upgradedWxml.includes('账单结息测算'))
+assert.ok(upgradedWxml.includes('从放款中代扣'))
+assert.ok(upgradedWxml.includes('class="home-version"'))
+
+const indexScript = fs.readFileSync(path.join(__dirname, '../pages/index/index.js'), 'utf8')
+const appScript = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8')
+assert.ok(appScript.includes("version: '" + packageMetadata.version + "'"))
+;[
+  ['deductedFeeExceedsFundingGap', '从放款中代扣的前置费用不能超过贷款金额与实际用途金额的差额'],
+  ['deductedFeeNotInContract', '从放款中代扣的前置费用未计入合同总还款，请核对合同总还款金额'],
+  ['paymentTermMismatch', '按当前自定义还款额会提前结清，与剩余期数不一致'],
+  ['unsupportedCustomPayment', '当前还款方式不支持这类自定义还款额']
+].forEach(function (mapping) {
+  assert.ok(indexScript.includes("if (error === '" + mapping[0] + "') return '" + mapping[1] + "'"))
+})
 
 console.log('page checks passed')

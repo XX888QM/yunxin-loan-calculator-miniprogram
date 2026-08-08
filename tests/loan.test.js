@@ -239,4 +239,485 @@ assert.strictEqual(loan.formatMoney(6752.28), '6752.28')
 assert.strictEqual(loan.formatMoney(195437.72), '195437.72')
 assert.ok(!loan.formatMoney(1000000).includes(','))
 
+// 二期：综合融资成本。费用在放款日或还款日发生，不能混入合同利息。
+;(function () {
+  const contract = loan.calcEqualInstallment(150000, 6, 36)
+  const noFee = loan.calcComprehensiveFinancing({
+    principal: 150000,
+    annualRate: 6,
+    months: 36,
+    purposeFunding: 150000
+  })
+  assert.strictEqual(noFee.valid, true)
+  closeTo(noFee.totalFinancingCost, contract.totalInterest, 0.001)
+  closeTo(noFee.monthlyIrr, 0.06 / 12, 0.0000001)
+
+  const res = loan.calcComprehensiveFinancing({
+    principal: 150000,
+    annualRate: 6,
+    months: 36,
+    method: 'equalInstallment',
+    purposeFunding: 145000,
+    upfrontFee: 2000,
+    periodicFee: 10
+  })
+  assert.strictEqual(res.valid, true)
+  closeTo(res.contractInterest, contract.totalInterest, 0.001)
+  closeTo(res.totalRepayment, contract.totalPayment, 0.001)
+  closeTo(res.totalPeriodicFee, 360, 0.001)
+  closeTo(res.financingFees, 2360, 0.001)
+  closeTo(res.declaredFinancingFees, 2360, 0.001)
+  // 已填写实际给车商的金额时，前置费默认视为从贷款中代扣，不能再扣第二次。
+  assert.strictEqual(res.upfrontFeePayment, 'deducted')
+  closeTo(res.netFunding, 145000, 0.001)
+  closeTo(res.nonPurposePrincipal, 5000, 0.001)
+  closeTo(res.deductedUpfrontFee, 2000, 0.001)
+  closeTo(res.unallocatedFinancedAmount, 3000, 0.001)
+  closeTo(res.nonInterestFinancingCost, 5360, 0.001)
+  closeTo(res.totalFinancingCost, contract.totalPayment + 360 - 145000, 0.001)
+  closeTo(res.totalFinancingCost, res.contractInterest + res.nonInterestFinancingCost, 0.001)
+  assert.ok(res.monthlyIrr > 0.007)
+  assert.ok(res.maxPeriodicOutflow > contract.monthlyPayment)
+  assert.strictEqual(res.cashflows.length, 36)
+  assert.strictEqual(res.schedule[0].periodicFee, 10)
+})()
+
+;(function () {
+  const contract = loan.calcEqualInstallment(150000, 6, 36)
+  const cashFee = loan.calcComprehensiveFinancing({
+    principal: 150000,
+    annualRate: 6,
+    months: 36,
+    purposeFunding: 145000,
+    upfrontFee: 2000,
+    upfrontFeePayment: 'cash'
+  })
+  assert.strictEqual(cashFee.valid, true)
+  assert.strictEqual(cashFee.upfrontFeePayment, 'cash')
+  closeTo(cashFee.netFunding, 143000, 0.001)
+  closeTo(cashFee.totalFinancingCost, contract.totalPayment + 2000 - 145000, 0.001)
+  closeTo(cashFee.nonPurposePrincipal, 5000, 0.001)
+  closeTo(cashFee.unallocatedFinancedAmount, 5000, 0.001)
+  closeTo(cashFee.nonInterestFinancingCost, 7000, 0.001)
+  closeTo(cashFee.totalFinancingCost, cashFee.contractInterest + cashFee.nonInterestFinancingCost, 0.001)
+
+  // 现金另付的服务费发生在放款日，最高单次现金压力不能只看月供。
+  const pressure = loan.calcComprehensiveFinancing({
+    principal: 1200,
+    annualRate: 0,
+    months: 12,
+    purposeFunding: 1200,
+    upfrontFee: 500,
+    upfrontFeePayment: 'cash'
+  })
+  assert.strictEqual(pressure.valid, true)
+  closeTo(pressure.maxPeriodicOutflow, 100, 0.001)
+  closeTo(pressure.maxCashPressure, 500, 0.001)
+  closeTo(pressure.maxSingleCashOutflow, 500, 0.001)
+})()
+
+;(function () {
+  const balloon = loan.calcBalloonLoan(200000, 14.4, 36, 80000)
+  const res = loan.calcComprehensiveFinancing({
+    principal: 200000,
+    annualRate: 14.4,
+    months: 36,
+    balloonAmount: 80000,
+    purposeFunding: 200000
+  })
+  assert.strictEqual(res.valid, true)
+  closeTo(res.totalRepayment, balloon.totalPayment, 0.001)
+  closeTo(res.maxPeriodicOutflow, balloon.lastPayment, 0.001)
+  assert.ok(res.maxPeriodicOutflow > res.schedule[0].cashflow)
+})()
+
+;(function () {
+  const invalid = loan.calcComprehensiveFinancing({
+    principal: 100000, annualRate: 6, months: 12, purposeFunding: 100001
+  })
+  assert.strictEqual(invalid.valid, false)
+  assert.strictEqual(invalid.error, 'invalidPurposeFunding')
+
+  const deductedFeeExceedsGap = loan.calcComprehensiveFinancing({
+    principal: 150000,
+    annualRate: 6,
+    months: 36,
+    purposeFunding: 149000,
+    upfrontFee: 2000,
+    upfrontFeePayment: 'deducted'
+  })
+  assert.strictEqual(deductedFeeExceedsGap.valid, false)
+  assert.strictEqual(deductedFeeExceedsGap.error, 'deductedFeeExceedsFundingGap')
+})()
+
+// 车贷落地价：全部实际付出必须恒等于落地价加融资成本。
+;(function () {
+  const res = loan.calcCarLandedCost({
+    vehiclePrice: 200000,
+    discount: 10000,
+    purchaseTax: 10000,
+    insurance: 6000,
+    registration: 1000,
+    requiredOptions: 0,
+    purposeFunding: 145000,
+    upfrontFee: 2000,
+    totalRepayment: 164278.44
+  })
+  assert.strictEqual(res.valid, true)
+  closeTo(res.landedCost, 207000, 0.001)
+  closeTo(res.cashAtPurchase, 64000, 0.001)
+  closeTo(res.financingCost, 21278.44, 0.001)
+  closeTo(res.totalPaid, 228278.44, 0.001)
+  closeTo(res.totalPaid, res.landedCost + res.financingCost, 0.001)
+
+  const financing = loan.calcComprehensiveFinancing({
+    principal: 150000, annualRate: 6, months: 36,
+    purposeFunding: 145000, upfrontFee: 2000, periodicFee: 10
+  })
+  const chained = loan.calcCarLandedCost({
+    vehiclePrice: 200000,
+    discount: 10000,
+    purchaseTax: 10000,
+    insurance: 6000,
+    registration: 1000,
+    financing
+  })
+  assert.strictEqual(chained.valid, true)
+  closeTo(chained.financingCost, financing.totalFinancingCost, 0.001)
+  closeTo(chained.totalPaid, chained.landedCost + chained.financingCost, 0.001)
+})()
+
+;(function () {
+  // 服务费若直接从放款中代扣，首期现金与融资成本都不能再把它加第二遍。
+  const deducted = loan.calcCarLandedCost({
+    vehiclePrice: 200000,
+    purposeFunding: 145000,
+    upfrontFee: 5000,
+    upfrontFeePayment: 'deducted',
+    totalRepayment: 164278.44
+  })
+  assert.strictEqual(deducted.valid, true)
+  closeTo(deducted.cashAtPurchase, 55000, 0.001)
+  closeTo(deducted.financingCost, 19278.44, 0.001)
+  closeTo(deducted.totalPaid, 219278.44, 0.001)
+  closeTo(deducted.totalPaid, deducted.landedCost + deducted.financingCost, 0.001)
+
+  const invalidDeducted = loan.calcCarLandedCost({
+    vehiclePrice: 200000,
+    purposeFunding: 145000,
+    upfrontFee: 5000,
+    upfrontFeePayment: 'deducted',
+    totalRepayment: 149999.99
+  })
+  assert.strictEqual(invalidDeducted.valid, false)
+  assert.strictEqual(invalidDeducted.error, 'deductedFeeNotInContract')
+})()
+
+;(function () {
+  const invalid = loan.calcCarLandedCost({
+    vehiclePrice: 200000,
+    purposeFunding: 200001
+  })
+  assert.strictEqual(invalid.valid, false)
+  assert.strictEqual(invalid.error, 'fundingExceedsLandedCost')
+
+  const subCentVehiclePrice = loan.calcCarLandedCost({ vehiclePrice: 0.001 })
+  assert.strictEqual(subCentVehiclePrice.valid, false)
+  assert.strictEqual(subCentVehiclePrice.error, 'invalidVehiclePrice')
+})()
+
+// 分段利率：单段必须与原固定利率还款表一致；改价后等额本息重算剩余月供。
+;(function () {
+  const fixed = loan.calcRatePathSchedule({
+    principal: 1000000,
+    months: 360,
+    method: 'equalInstallment',
+    ratePath: [{ effectiveMonth: 1, annualRate: 3.1 }]
+  })
+  const original = loan.calcEqualInstallment(1000000, 3.1, 360)
+  assert.strictEqual(fixed.valid, true)
+  assertScheduleBalances(fixed)
+  closeTo(fixed.totalPayment, original.totalPayment, 0.001)
+  closeTo(fixed.totalInterest, original.totalInterest, 0.001)
+  closeTo(fixed.schedule[0].payment, original.schedule[0].payment, 0.001)
+  assert.deepStrictEqual(fixed.schedule, original.schedule)
+  assert.strictEqual(fixed.isRateScenario, true)
+  assert.strictEqual(fixed.repricingUnit, 'month')
+})()
+
+;(function () {
+  const staged = loan.calcRatePathSchedule({
+    principal: 100000,
+    months: 24,
+    method: 'equalInstallment',
+    ratePath: [
+      { effectiveMonth: 1, annualRate: 3.6 },
+      { effectiveMonth: 13, annualRate: 4.2 }
+    ]
+  })
+  assert.strictEqual(staged.valid, true)
+  assert.strictEqual(staged.ratePath.length, 2)
+  assert.ok(staged.schedule[12].payment > staged.schedule[11].payment)
+  const firstMonthlyRate = 0.036 / 12
+  const firstPayment = 100000 * firstMonthlyRate * Math.pow(1 + firstMonthlyRate, 24) /
+    (Math.pow(1 + firstMonthlyRate, 24) - 1)
+  const balanceAfter12 = 100000 * Math.pow(1 + firstMonthlyRate, 12) - firstPayment *
+    (Math.pow(1 + firstMonthlyRate, 12) - 1) / firstMonthlyRate
+  const secondMonthlyRate = 0.042 / 12
+  const expectedRecastPayment = balanceAfter12 * secondMonthlyRate * Math.pow(1 + secondMonthlyRate, 12) /
+    (Math.pow(1 + secondMonthlyRate, 12) - 1)
+  closeTo(staged.paymentChanges[1].monthlyPayment, expectedRecastPayment, 0.5)
+  assertScheduleBalances(staged)
+})()
+
+;(function () {
+  const lpr = loan.calcRatePathSchedule({
+    principal: 100000,
+    months: 24,
+    method: 'equalPrincipal',
+    lprPath: [
+      { effectiveMonth: 1, lprBps: 360 },
+      { effectiveMonth: 13, lprBps: 330 }
+    ],
+    spreadBps: -30
+  })
+  assert.strictEqual(lpr.valid, true)
+  closeTo(lpr.ratePath[0].annualRate, 3.3, 0.000001)
+  closeTo(lpr.ratePath[1].annualRate, 3, 0.000001)
+  assert.strictEqual(lpr.ratePathType, 'lpr')
+  closeTo(lpr.initialAnnualRate, 3.3, 0.000001)
+  closeTo(lpr.finalAnnualRate, 3, 0.000001)
+  assertScheduleBalances(lpr)
+
+  const invalid = loan.calcRatePathSchedule({
+    principal: 100000,
+    months: 24,
+    method: 'equalInstallment',
+    ratePath: [{ effectiveMonth: 2, annualRate: 3.1 }]
+  })
+  assert.strictEqual(invalid.valid, false)
+  assert.strictEqual(invalid.error, 'invalidRatePath')
+
+  const subCentPrincipal = loan.calcRatePathSchedule({
+    principal: 0.001,
+    months: 12,
+    annualRate: 3.1
+  })
+  assert.strictEqual(subCentPrincipal.valid, false)
+  assert.strictEqual(subCentPrincipal.error, 'invalidPrincipal')
+})()
+
+// 精确提前还款：账单利息优先；没有账单时才按日计息估算。
+;(function () {
+  const statement = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    prepayPrincipal: 20000,
+    reduceMode: 'payment',
+    settlementInterest: 321.23,
+    penaltyType: 'percentOfPrepay',
+    penaltyValue: 3
+  })
+  assert.strictEqual(statement.valid, true)
+  assert.strictEqual(statement.precisionMode, 'statement')
+  closeTo(statement.accruedInterest, 321.23, 0.001)
+  closeTo(statement.penalty, 600, 0.001)
+  closeTo(statement.settlementTotal, 20921.23, 0.001)
+  assert.ok(statement.newMonthlyPayment < statement.oldMonthlyPayment)
+})()
+
+;(function () {
+  const daily = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    prepayPrincipal: 20000,
+    reduceMode: 'term',
+    lastSettledDate: '2026-01-01',
+    prepayDate: '2026-01-16',
+    dayCount: 'ACT_365F',
+    penaltyType: 'fixed',
+    penaltyValue: 500
+  })
+  assert.strictEqual(daily.valid, true)
+  assert.strictEqual(daily.precisionMode, 'dailyEstimate')
+  assert.strictEqual(daily.accrualDays, 15)
+  closeTo(daily.accruedInterest, 493.15, 0.001)
+  closeTo(daily.penalty, 500, 0.001)
+  assert.ok(daily.newRemainingMonths < daily.oldRemainingMonths)
+  const principalCents = daily.schedule.reduce((sum, row) => sum + toCents(row.principal), 0)
+  assert.strictEqual(principalCents, toCents(daily.afterPrepayBalance))
+  assert.strictEqual(toCents(daily.schedule[daily.schedule.length - 1].balance), 0)
+})()
+
+;(function () {
+  const day360 = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    prepayPrincipal: 10000,
+    reduceMode: 'payment',
+    lastSettledDate: '2026-01-01',
+    prepayDate: '2026-02-01',
+    dayCount: '30_360',
+    penaltyType: 'percentOfBalance',
+    penaltyValue: 3
+  })
+  assert.strictEqual(day360.valid, true)
+  assert.strictEqual(day360.accrualDays, 30)
+  assert.strictEqual(day360.dayCountConvention, '30_360_US')
+  closeTo(day360.accruedInterest, 1000, 0.001)
+  closeTo(day360.penalty, 3000, 0.001)
+
+  const actual360 = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    prepayPrincipal: 10000,
+    reduceMode: 'payment',
+    lastSettledDate: '2026-01-01',
+    prepayDate: '2026-02-01',
+    dayCount: 'ACT_360'
+  })
+  assert.strictEqual(actual360.valid, true)
+  assert.strictEqual(actual360.accrualDays, 31)
+  closeTo(actual360.accruedInterest, 1033.33, 0.001)
+
+  // 30/360 US 要把二月底视同第 30 天，不能按真实 31 天把利息多算成 33 天。
+  const februaryEnd = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    prepayPrincipal: 1,
+    reduceMode: 'term',
+    lastSettledDate: '2026-02-28',
+    prepayDate: '2026-03-31',
+    dayCount: '30_360'
+  })
+  assert.strictEqual(februaryEnd.valid, true)
+  assert.strictEqual(februaryEnd.accrualDays, 30)
+  closeTo(februaryEnd.accruedInterest, 1000, 0.001)
+
+  const equalPrincipal = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalPrincipal',
+    prepayPrincipal: 20000,
+    reduceMode: 'payment',
+    settlementInterest: 0
+  })
+  assert.strictEqual(equalPrincipal.valid, true)
+  assert.ok(equalPrincipal.newMonthlyPayment < equalPrincipal.oldMonthlyPayment)
+
+  const paidOff = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    prepayPrincipal: 100000,
+    reduceMode: 'term',
+    settlementInterest: 0
+  })
+  assert.strictEqual(paidOff.valid, true)
+  assert.strictEqual(paidOff.newRemainingMonths, 0)
+  assert.strictEqual(paidOff.schedule.length, 0)
+
+  const tooMuch = loan.calcExactPrepayment({
+    remainingPrincipal: 100000, remainingMonths: 24, annualRate: 12,
+    method: 'equalInstallment', prepayPrincipal: 100001,
+    settlementInterest: 0
+  })
+  assert.strictEqual(tooMuch.valid, false)
+  assert.strictEqual(tooMuch.error, 'prepayExceedsBalance')
+
+  const unsupported = loan.calcExactPrepayment({
+    remainingPrincipal: 100000, remainingMonths: 24, annualRate: 12,
+    method: 'interestOnly', prepayPrincipal: 10000, settlementInterest: 0
+  })
+  assert.strictEqual(unsupported.valid, false)
+  assert.strictEqual(unsupported.error, 'unsupportedMethod')
+
+  const variableRate = loan.calcExactPrepayment({
+    remainingPrincipal: 100000, remainingMonths: 24, annualRate: 12,
+    method: 'equalInstallment', prepayPrincipal: 10000, settlementInterest: 0,
+    lprPath: [{ effectiveMonth: 1, lpr: 3.6 }]
+  })
+  assert.strictEqual(variableRate.valid, false)
+  assert.strictEqual(variableRate.error, 'unsupportedRatePath')
+
+  const rateEvents = loan.calcExactPrepayment({
+    remainingPrincipal: 100000, remainingMonths: 24, annualRate: 12,
+    method: 'equalInstallment', prepayPrincipal: 10000, settlementInterest: 0,
+    rateEvents: [{ effectiveMonth: 1, annualRate: 3.6 }]
+  })
+  assert.strictEqual(rateEvents.valid, false)
+  assert.strictEqual(rateEvents.error, 'unsupportedRatePath')
+
+  const insufficientCustomPayment = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    monthlyPayment: 1100,
+    prepayPrincipal: 1,
+    settlementInterest: 0
+  })
+  assert.strictEqual(insufficientCustomPayment.valid, false)
+  assert.strictEqual(insufficientCustomPayment.error, 'paymentInsufficient')
+
+  const mismatchedCustomPayment = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    monthlyPayment: 10000,
+    prepayPrincipal: 1,
+    settlementInterest: 0
+  })
+  assert.strictEqual(mismatchedCustomPayment.valid, false)
+  assert.strictEqual(mismatchedCustomPayment.error, 'paymentTermMismatch')
+
+  const incompatibleCustomPayment = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalPrincipal',
+    monthlyPayment: 5000,
+    prepayPrincipal: 1,
+    settlementInterest: 0
+  })
+  assert.strictEqual(incompatibleCustomPayment.valid, false)
+  assert.strictEqual(incompatibleCustomPayment.error, 'unsupportedCustomPayment')
+
+  const invalidBalloon = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    balloonAmount: -1,
+    prepayPrincipal: 1,
+    settlementInterest: 0
+  })
+  assert.strictEqual(invalidBalloon.valid, false)
+  assert.strictEqual(invalidBalloon.error, 'invalidBalloonAmount')
+
+  const belowOneCent = loan.calcExactPrepayment({
+    remainingPrincipal: 100000,
+    remainingMonths: 24,
+    annualRate: 12,
+    method: 'equalInstallment',
+    prepayPrincipal: 0.001,
+    settlementInterest: 0
+  })
+  assert.strictEqual(belowOneCent.valid, false)
+  assert.strictEqual(belowOneCent.error, 'invalidPrepayPrincipal')
+})()
+
 console.log('loan calculator checks passed')

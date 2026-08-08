@@ -1,4 +1,350 @@
-<view class="page">
+<view class="page quote-page">
+  <!-- 首页：报价体检入口 -->
+  <view wx:if="{{screenMode == 'home'}}" class="home-screen">
+    <view class="home-hero">
+      <view class="home-topbar">
+        <view class="home-brand">
+          <view class="home-brand-mark">
+            <image class="home-brand-logo" src="/assets/logo.png" mode="aspectFill" />
+          </view>
+          <view class="home-brand-copy">
+            <text class="home-brand-title">贷款报价体检</text>
+            <text class="home-brand-subtitle">看清折算资金成本</text>
+          </view>
+        </view>
+        <button class="home-history-btn" bindtap="openHistory">历史</button>
+      </view>
+      <view class="home-hero-copy">
+        <text class="home-eyebrow">一笔贷款，先做一次体检</text>
+        <text class="home-hero-title">看月供，更要看</text>
+        <text class="home-hero-title second-line">最后实际花了多少</text>
+        <text class="home-hero-desc">填写合同里的金额、期数和费用，帮你把折算年化和已录入成本算明白。</text>
+      </view>
+      <view class="home-asset-row">
+        <button class="home-asset-card car" data-purpose="car" bindtap="startQuoteForPurpose">
+          <image src="/assets/quote-car.png" mode="aspectFit" />
+          <text class="home-asset-label">买车报价</text>
+        </button>
+        <button class="home-asset-card home" data-purpose="home" bindtap="startQuoteForPurpose">
+          <image src="/assets/quote-home.png" mode="aspectFit" />
+          <text class="home-asset-label">买房报价</text>
+        </button>
+      </view>
+    </view>
+
+    <view class="home-content">
+      <view class="home-note">
+        <text class="home-note-title">不只算月供</text>
+        <text class="home-note-text">把前置费用、每期费用和尾款一起放进来，避免只看表面利率。</text>
+      </view>
+      <button class="primary-action home-start" bindtap="startQuickCalc">开始报价体检</button>
+      <button class="secondary-action" bindtap="openTools">直接使用全部工具</button>
+      <view class="privacy-note">
+        <image class="privacy-logo" src="/assets/quote-shield.png" mode="aspectFit" />
+        <view>
+          <text class="privacy-title">所有数据仅在本机计算</text>
+          <text class="privacy-text">默认不保存；主动保存的报告仅留本机，不上传。</text>
+        </view>
+      </view>
+      <text class="home-version" wx:if="{{appVersion}}">v{{appVersion}}</text>
+    </view>
+  </view>
+
+  <view wx:elif="{{screenMode == 'quote'}}" class="quote-screen">
+    <view class="quote-hero">
+      <view class="quote-topbar">
+        <view class="quote-brand">
+          <view class="quote-brand-mark">
+            <image class="quote-brand-logo" src="/assets/logo.png" mode="aspectFill" />
+          </view>
+          <view class="quote-brand-copy">
+            <text class="quote-brand-title">贷款报价体检</text>
+            <text class="quote-brand-step">第 <text>{{quoteStep}}</text> 步 / 共 4 步</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="quote-progress" aria-label="报价体检进度">
+      <view class="quote-progress-line"></view>
+      <view class="quote-progress-dot {{quoteStep >= 1 ? 'is-active' : ''}}"><text>1</text></view>
+      <view class="quote-progress-dot {{quoteStep >= 2 ? 'is-active' : ''}}"><text>2</text></view>
+      <view class="quote-progress-dot {{quoteStep >= 3 ? 'is-active' : ''}}"><text>3</text></view>
+      <view class="quote-progress-dot {{quoteStep >= 4 ? 'is-active' : ''}}"><text>4</text></view>
+    </view>
+
+    <view class="quote-content">
+      <view class="quote-flow-navigation" wx:if="{{quoteStep < 4}}">
+        <button class="quote-back-home" bindtap="openHome">返回首页</button>
+      </view>
+      <view wx:if="{{quoteStep == 1}}" class="quote-step quote-purpose-step">
+        <text class="quote-heading">这笔贷款主要用来做什么？</text>
+        <text class="quote-lead">选择后会显示对应的填写提示与核对项。</text>
+        <view class="quote-inline-error" wx:if="{{quoteError && quoteErrorStep == quoteStep}}">
+          <text>{{quoteError}}</text>
+        </view>
+        <view class="purpose-card-grid">
+          <button class="purpose-card purpose-card-car {{quoteSelectedPurpose == 'car' ? 'is-selected' : ''}}" data-purpose="car" bindtap="setQuotePurpose">
+            <image class="purpose-image" src="/assets/quote-car.png" mode="aspectFit" />
+            <text class="purpose-card-title">买车</text>
+            <image class="purpose-check" wx:if="{{quoteSelectedPurpose == 'car'}}" src="/assets/quote-selected-check.png" mode="aspectFit" />
+          </button>
+          <button class="purpose-card purpose-card-home {{quoteSelectedPurpose == 'home' ? 'is-selected' : ''}}" data-purpose="home" bindtap="setQuotePurpose">
+            <image class="purpose-image" src="/assets/quote-home.png" mode="aspectFit" />
+            <text class="purpose-card-title">买房</text>
+            <image class="purpose-check" wx:if="{{quoteSelectedPurpose == 'home'}}" src="/assets/quote-selected-check.png" mode="aspectFit" />
+          </button>
+        </view>
+        <view class="quote-tip">
+          <image class="quote-tip-icon" src="/assets/quote-tip-check.png" mode="aspectFit" />
+          <text class="quote-tip-text" wx:if="{{quoteSelectedPurpose == 'car'}}">车贷期限多较短，利率受期限、首付和车型影响。</text>
+          <text class="quote-tip-text" wx:elif="{{quoteSelectedPurpose == 'home'}}">房贷请核对重定价、还款方式和提前还款规则。</text>
+          <text class="quote-tip-text" wx:else>按合同实际填写，比只看宣传利率更接近真实成本。</text>
+        </view>
+        <button class="primary-action quote-purpose-next" bindtap="nextQuoteStep">
+          <text>下一步：填写贷款金额</text>
+        </button>
+        <button class="quote-text-action" bindtap="openTools">
+          <image class="quote-quick-icon" src="/assets/quote-clock.png" mode="aspectFit" />
+          <text>我只想快速算月供</text>
+          <image class="quote-quick-arrow" src="/assets/quote-arrow.png" mode="aspectFit" />
+        </button>
+        <view class="quote-privacy-note">
+          <image src="/assets/quote-shield.png" mode="aspectFit" />
+          <view class="quote-privacy-copy">
+            <text>所有数据仅在本机计算</text>
+            <text>不上传，只有你点保存报告才会留在本机。</text>
+          </view>
+        </view>
+      </view>
+
+      <view wx:elif="{{quoteStep == 2}}" class="quote-step">
+        <text class="quote-heading">填写贷款金额</text>
+        <text class="quote-lead">填写合同贷款本金：不是车价、首付，也不是扣费后到账金额；代扣服务费在下一步填写。</text>
+        <view class="quote-inline-error" wx:if="{{quoteError && quoteErrorStep == quoteStep}}">
+          <text>{{quoteError}}</text>
+        </view>
+        <view class="quote-form-card">
+          <view class="quote-field">
+            <text class="quote-field-label">贷款本金</text>
+            <view class="quote-field-control">
+              <input class="quote-input" placeholder-class="quote-input-placeholder" placeholder="例如 200000" type="digit" value="{{quoteForm.principal}}" data-form="quoteForm" data-field="principal" bindinput="onInput" />
+              <text class="quote-unit">元</text>
+            </view>
+          </view>
+          <view class="quote-field">
+            <text class="quote-field-label">还款期数</text>
+            <view class="quote-field-control">
+              <input class="quote-input" placeholder-class="quote-input-placeholder" placeholder="{{quoteForm.purpose == 'home' ? '例如 360' : '例如 36'}}" type="number" value="{{quoteForm.months}}" data-form="quoteForm" data-field="months" bindinput="onInput" />
+              <text class="quote-unit">期</text>
+            </view>
+          </view>
+        </view>
+        <view class="quote-form-hint">
+          <text wx:if="{{quoteForm.purpose == 'car'}}">车贷通常期限较短；请按合同上的总期数填写。</text>
+          <text wx:else>房贷默认 360 期（30 年），请按合同实际总期数修改；已有贷款请使用“提前还款”工具。</text>
+        </view>
+        <view class="quote-action-row">
+          <button class="outline-action quote-action-back" bindtap="previousQuoteStep">上一步</button>
+          <button class="primary-action compact quote-action-next" bindtap="nextQuoteStep">下一步</button>
+        </view>
+      </view>
+
+      <view wx:elif="{{quoteStep == 3}}" class="quote-step">
+        <text class="quote-heading">把还款和费用补全</text>
+        <text class="quote-lead">费用未核对可先选“未核对”，结果只显示已录入项目的下限。</text>
+        <view class="quote-inline-error" wx:if="{{quoteError && quoteErrorStep == quoteStep}}">
+          <text>{{quoteError}}</text>
+        </view>
+        <view class="quote-form-card">
+          <text class="quote-section-title">还款结构</text>
+          <view class="quote-segmented three">
+            <button class="quote-segment-button {{quoteForm.structure == 'equalPayment' ? 'is-selected' : ''}}" data-structure="equalPayment" bindtap="setQuoteStructure">等额月供</button>
+            <button class="quote-segment-button {{quoteForm.structure == 'balloon' ? 'is-selected' : ''}}" data-structure="balloon" bindtap="setQuoteStructure">含尾款</button>
+            <button class="quote-segment-button {{quoteForm.structure == 'interestOnly' ? 'is-selected' : ''}}" data-structure="interestOnly" bindtap="setQuoteStructure">先息后本</button>
+          </view>
+          <view class="quote-field">
+            <text class="quote-field-label">{{quoteForm.structure == 'interestOnly' ? '每期利息' : '每期还款'}}</text>
+            <view class="quote-field-control">
+              <input class="quote-input" placeholder-class="quote-input-placeholder" placeholder="按合同填写" type="digit" value="{{quoteForm.monthlyPayment}}" data-form="quoteForm" data-field="monthlyPayment" bindinput="onInput" />
+              <text class="quote-unit">元</text>
+            </view>
+          </view>
+          <view class="quote-field" wx:if="{{quoteForm.structure == 'balloon'}}">
+            <text class="quote-field-label">末期尾款</text>
+            <view class="quote-field-control">
+              <input class="quote-input" placeholder-class="quote-input-placeholder" placeholder="最后一期额外还款" type="digit" value="{{quoteForm.balloonAmount}}" data-form="quoteForm" data-field="balloonAmount" bindinput="onInput" />
+              <text class="quote-unit">元</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="quote-form-card quote-fee-card">
+          <text class="quote-section-title">费用情况</text>
+          <view class="quote-segmented three">
+            <button class="quote-segment-button {{quoteForm.feeStatus == 'unknown' ? 'is-selected' : ''}}" data-form="quoteForm" data-field="feeStatus" data-value="unknown" bindtap="setFormValue">未核对</button>
+            <button class="quote-segment-button {{quoteForm.feeStatus == 'none' ? 'is-selected' : ''}}" data-form="quoteForm" data-field="feeStatus" data-value="none" bindtap="setFormValue">确认无费用</button>
+            <button class="quote-segment-button {{quoteForm.feeStatus == 'known' ? 'is-selected' : ''}}" data-form="quoteForm" data-field="feeStatus" data-value="known" bindtap="setFormValue">有费用</button>
+          </view>
+          <block wx:if="{{quoteForm.feeStatus == 'known'}}">
+            <view class="quote-field">
+              <text class="quote-field-label">前置费用</text>
+              <view class="quote-field-control">
+                <input class="quote-input" placeholder-class="quote-input-placeholder" placeholder="确认没有填 0" type="digit" value="{{quoteForm.upfrontFee}}" data-form="quoteForm" data-field="upfrontFee" bindinput="onInput" />
+                <text class="quote-unit">元</text>
+              </view>
+            </view>
+            <view class="quote-field">
+              <text class="quote-field-label">每期费用</text>
+              <view class="quote-field-control">
+                <input class="quote-input" placeholder-class="quote-input-placeholder" placeholder="每月固定服务费等" type="digit" value="{{quoteForm.periodicFee}}" data-form="quoteForm" data-field="periodicFee" bindinput="onInput" />
+                <text class="quote-unit">元</text>
+              </view>
+            </view>
+          </block>
+          <view class="quote-field">
+            <text class="quote-field-label">合同或宣传标注利率</text>
+            <view class="quote-field-control">
+              <input class="quote-input" placeholder-class="quote-input-placeholder" placeholder="选填，用于比较" type="digit" value="{{quoteForm.claimedRate}}" data-form="quoteForm" data-field="claimedRate" bindinput="onInput" />
+              <text class="quote-unit">%</text>
+            </view>
+          </view>
+          <view class="quote-segmented two slim">
+            <button class="quote-segment-button {{quoteForm.claimedRateMode == 'annual' ? 'is-selected' : ''}}" data-form="quoteForm" data-field="claimedRateMode" data-value="annual" bindtap="setFormValue">标注为年利率</button>
+            <button class="quote-segment-button {{quoteForm.claimedRateMode == 'monthly' ? 'is-selected' : ''}}" data-form="quoteForm" data-field="claimedRateMode" data-value="monthly" bindtap="setFormValue">标注为月利率</button>
+          </view>
+          <text class="quote-form-hint">合同写“平息”或“月费率”时，不要当作月利率比较；请到“平息换算”按合同口径核对。</text>
+          <view class="quote-prepay-row">
+            <text class="quote-prepay-label">提前还款规则是否已知？</text>
+            <view class="quote-inline-choice">
+              <button class="quote-inline-button {{quoteForm.prepayKnown == 'yes' ? 'is-selected' : ''}}" data-form="quoteForm" data-field="prepayKnown" data-value="yes" bindtap="setFormValue">已知</button>
+              <button class="quote-inline-button {{quoteForm.prepayKnown == 'no' ? 'is-selected' : ''}}" data-form="quoteForm" data-field="prepayKnown" data-value="no" bindtap="setFormValue">不清楚</button>
+            </view>
+          </view>
+        </view>
+        <view class="quote-action-row">
+          <button class="outline-action quote-action-back" bindtap="previousQuoteStep">上一步</button>
+          <button class="primary-action compact quote-action-next" bindtap="nextQuoteStep">查看体检结果</button>
+        </view>
+      </view>
+
+      <view wx:elif="{{quoteStep == 4}}" class="quote-step quote-result-step">
+        <text class="quote-heading">报价体检结果</text>
+        <text class="quote-lead">以下结果按你已填写的还款现金流反推。</text>
+        <view class="quote-form-error" wx:if="{{quoteResult.error}}">{{quoteResult.error}}</view>
+        <block wx:if="{{quoteResult.valid}}">
+          <view class="quote-result-hero">
+            <text class="quote-result-label">{{quoteResult.rateLabel}}</text>
+            <text class="quote-result-value">{{quoteResult.annualEffectiveRate}}</text>
+            <text class="quote-result-summary">{{quoteResult.summaryText}}</text>
+          </view>
+          <text class="quote-form-hint" wx:if="{{quoteResult.purpose == 'home'}}">若合同会随 LPR 重定价，本页只按当前填入的金额测算；后续月供请用“LPR 情景”再核对。</text>
+          <view class="quote-result-grid">
+            <view class="quote-metric">
+              <text>已录入成本合计</text>
+              <text>{{quoteResult.totalFinancingCost}}</text>
+            </view>
+            <view class="quote-metric">
+              <text>单项最高已录入支出</text>
+              <text>{{quoteResult.maxCashPressure}}</text>
+            </view>
+            <view class="quote-metric full">
+              <text>末期还款</text>
+              <text>{{quoteResult.lastPayment}}</text>
+            </view>
+          </view>
+          <text class="quote-form-hint">这不是签约当天总现金；首付、押金和同日多笔费用请按实际相加。</text>
+          <view class="quote-checklist">
+            <text class="quote-checklist-title">签约前再核对</text>
+            <view wx:for="{{quoteResult.checklist}}" wx:key="index" class="quote-check-item">
+              <view class="quote-check-dot"></view>
+              <text class="quote-check-text">{{item}}</text>
+            </view>
+          </view>
+          <view class="quote-report-actions">
+            <view class="quote-report-secondary-row">
+              <button class="outline-action report" bindtap="copyQuoteReport">复制结果</button>
+              <button class="outline-action report" bindtap="exportQuoteReport">导出报告</button>
+            </view>
+            <button class="primary-action report quote-report-save" bindtap="saveQuoteReport">保存报告</button>
+          </view>
+          <button class="quote-compare-add {{!quoteResult.comparable ? 'is-disabled' : ''}}" disabled="{{!quoteResult.comparable}}" bindtap="addQuoteComparison">{{quoteResult.comparable ? '加入报价对比（最多 3 份）' : '费用确认后才能对比'}}</button>
+          <view class="quote-compare-card" wx:if="{{quoteComparisons.length}}">
+            <text class="quote-compare-title">临时报价对比</text>
+            <text class="quote-compare-note">仅比较同用途、费用已确认的报价；费用未核对时不能判断谁更划算。</text>
+            <view class="quote-compare-item" wx:for="{{quoteComparisons}}" wx:key="id">
+              <view class="quote-compare-copy">
+                <text class="quote-compare-purpose">{{item.purpose == 'home' ? '买房报价' : '买车报价'}}</text>
+                <text class="quote-compare-detail">年化 {{item.annualEffectiveRate}} · 总成本 {{item.totalFinancingCost}} 元</text>
+                <text class="quote-compare-detail">单项最高已录入支出 {{item.maxCashPressure}} 元 · 末期 {{item.lastPayment}} 元</text>
+              </view>
+              <button class="quote-compare-remove" data-id="{{item.id}}" bindtap="removeQuoteComparison">移除</button>
+            </view>
+          </view>
+          <view class="quote-result-navigation">
+            <button class="outline-action" bindtap="previousQuoteStep">修改这份报价</button>
+            <button class="outline-action" bindtap="startNewQuote">新建下一份报价</button>
+            <button class="quote-home-action" bindtap="openHome">返回首页</button>
+          </view>
+        </block>
+        <view class="quote-action-row" wx:if="{{!quoteResult.valid}}">
+          <button class="outline-action quote-action-back" bindtap="previousQuoteStep">返回修改</button>
+          <button class="primary-action compact quote-action-next" bindtap="openTools">先用工具计算</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view wx:elif="{{screenMode == 'history'}}" class="history-screen">
+    <view class="history-hero">
+      <view class="history-topbar">
+        <view class="history-brand">
+          <view class="history-brand-mark">
+            <image class="history-brand-logo" src="/assets/logo.png" mode="aspectFill" />
+          </view>
+          <view class="history-brand-copy">
+            <text class="history-title">报价体检记录</text>
+            <text class="history-subtitle">仅保存在本机</text>
+          </view>
+        </view>
+        <view class="history-top-actions">
+          <button class="quote-tools-btn" bindtap="openHome">首页</button>
+          <button class="quote-tools-btn" bindtap="openTools">工具</button>
+        </view>
+      </view>
+    </view>
+    <view class="history-content">
+      <view class="history-heading-row">
+        <text class="history-heading">已保存的报告</text>
+        <button class="history-clear" wx:if="{{quoteHistory.length}}" bindtap="confirmClearQuoteHistory">清空全部</button>
+      </view>
+      <view class="history-list" wx:if="{{quoteHistory.length}}">
+        <view class="history-item" wx:for="{{quoteHistory}}" wx:key="id">
+          <view class="history-item-top">
+            <text class="history-item-title">{{item.purpose == 'home' ? '买房报价体检' : '买车报价体检'}}</text>
+            <text class="history-item-date">{{item.createdAt}}</text>
+          </view>
+          <text class="history-item-summary">{{item.summaryText}}</text>
+          <view class="history-item-metrics">
+            <text class="history-metric-text">{{item.rateLabel}} {{item.annualEffectiveRate}}</text>
+            <text class="history-metric-text">{{item.costLabel}} {{item.totalFinancingCost}}</text>
+          </view>
+          <view class="history-item-actions">
+            <button class="history-restore" data-id="{{item.id}}" bindtap="restoreQuoteHistory">打开报告</button>
+            <button class="history-delete" data-id="{{item.id}}" bindtap="confirmRemoveQuoteHistory">删除</button>
+          </view>
+        </view>
+      </view>
+      <view class="history-empty" wx:else>
+        <image class="history-empty-logo" src="/assets/logo.png" mode="aspectFit" />
+        <text class="history-empty-title">还没有保存的体检报告</text>
+        <text class="history-empty-text">完成一次报价体检后，可以把结果保存到这里。</text>
+        <button class="primary-action" bindtap="startQuickCalc">开始报价体检</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:else class="tools-screen">
   <view class="hero">
     <view class="masthead">
       <view class="brand-block">
@@ -7,13 +353,20 @@
         </view>
         <view class="masthead-copy">
           <view class="brand-row">
-            <text class="title">云鑫真实贷款计算器</text>
+            <text class="title">全部贷款工具</text>
           </view>
-          <text class="subtitle">看清月供，也看清真实成本</text>
+          <text class="subtitle">月供、折算成本和还款明细都能算</text>
         </view>
       </view>
     </view>
-    <text class="hero-badge">本地计算 · 不上传 · 仅供测算</text>
+    <view class="tools-hero-footer">
+      <text class="hero-badge">本地计算 · 不上传 · 仅供测算</text>
+      <view class="tools-hero-actions">
+        <button class="tools-hero-btn plain" bindtap="openHome">首页</button>
+        <button class="tools-hero-btn" bindtap="startQuickCalc">报价体检</button>
+        <button class="tools-hero-btn plain" bindtap="openHistory">记录</button>
+      </view>
+    </view>
   </view>
 
   <view class="nav-shell">
@@ -244,7 +597,7 @@
     </view>
     <view class="field">
       <text class="label">前置费用</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="服务费等，没有留空" type="digit" value="{{actualForm.upfrontFee}}" data-form="actualForm" data-field="upfrontFee" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="确认无费用填 0；未核对留空" type="digit" value="{{actualForm.upfrontFee}}" data-form="actualForm" data-field="upfrontFee" bindinput="onInput" />
       <text class="unit">{{actualForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field">
@@ -253,15 +606,15 @@
       <text class="unit">期</text>
     </view>
     <view class="field">
-      <text class="label">对外{{actualForm.claimedRateMode == 'monthly' ? '月息%' : '年化%'}}</text>
+      <text class="label">标注{{actualForm.claimedRateMode == 'monthly' ? '月利率%' : '年利率%'}}</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="选填，用于口径比较" type="digit" value="{{actualForm.claimedMonthlyRate}}" data-form="actualForm" data-field="claimedMonthlyRate" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="segmented two">
-      <text class="{{actualForm.claimedRateMode == 'annual' ? 'active' : ''}}" data-form="actualForm" data-field="claimedRateMode" data-value="annual" bindtap="setFormValue">年化%</text>
-      <text class="{{actualForm.claimedRateMode == 'monthly' ? 'active' : ''}}" data-form="actualForm" data-field="claimedRateMode" data-value="monthly" bindtap="setFormValue">月息%</text>
+      <text class="{{actualForm.claimedRateMode == 'annual' ? 'active' : ''}}" data-form="actualForm" data-field="claimedRateMode" data-value="annual" bindtap="setFormValue">标注为年利率</text>
+      <text class="{{actualForm.claimedRateMode == 'monthly' ? 'active' : ''}}" data-form="actualForm" data-field="claimedRateMode" data-value="monthly" bindtap="setFormValue">标注为月利率</text>
     </view>
-    <text class="field-hint" wx:if="{{actualForm.inputMode == 'interest'}}">只知总利息只能按等额月供折算；尾款贷和先息后本必须填写实际还款结构。</text>
+    <text class="field-hint">未录入费用不会计入结果；费用未核对时，结果只能视为已录入项目的下限。<text wx:if="{{actualForm.inputMode == 'interest'}}">只知总利息只能按等额月供折算；尾款贷和先息后本必须填写实际还款结构。</text></text>
     <view class="{{actualResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{actualResult.error}}">{{actualResult.error}}</view>
     <view class="result-block">
     <view class="result-summary" wx:if="{{actualResult.summaryText}}">
@@ -272,16 +625,16 @@
       <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
     </view>
     <view class="result-grid">
-      <view class="metric main"><text>真实月利率</text><text>{{actualResult.monthlyRate}}</text></view>
-      <view class="metric"><text>含费月利率</text><text>{{actualResult.feeAdjustedMonthlyRate}}</text></view>
+      <view class="metric main"><text>按现金流折算月利率</text><text>{{actualResult.monthlyRate}}</text></view>
+      <view class="metric"><text>含已录入费用月利率</text><text>{{actualResult.feeAdjustedMonthlyRate}}</text></view>
       <view class="metric"><text>名义年化</text><text>{{actualResult.annualNominalRate}}</text></view>
       <view class="metric"><text>复利年化</text><text>{{actualResult.annualEffectiveRate}}</text></view>
-      <view class="metric"><text>含费名义年化</text><text>{{actualResult.feeAdjustedAnnualNominalRate}}</text></view>
-      <view class="metric"><text>含费复利年化</text><text>{{actualResult.feeAdjustedAnnualEffectiveRate}}</text></view>
+      <view class="metric"><text>含已录入费用名义年化</text><text>{{actualResult.feeAdjustedAnnualNominalRate}}</text></view>
+      <view class="metric"><text>含已录入费用复利年化</text><text>{{actualResult.feeAdjustedAnnualEffectiveRate}}</text></view>
       <view class="metric"><text>{{actualResult.comparisonLabelPrefix}}口径倍数</text><text>{{actualResult.claimedMultiple}}</text></view>
       <view class="metric"><text>{{actualResult.comparisonLabelPrefix}}月息差</text><text>{{actualResult.claimedMonthlyGap}}</text></view>
       <view class="metric"><text>总利息</text><text>{{actualResult.totalInterest}}</text></view>
-      <view class="metric"><text>总融资成本</text><text>{{actualResult.totalFinancingCost}}</text></view>
+      <view class="metric"><text>已录入总融资成本</text><text>{{actualResult.totalFinancingCost}}</text></view>
     </view>
     </view>
   </view>
@@ -322,7 +675,7 @@
     </view>
     <view class="result-grid">
       <view class="metric main"><text>平息月供</text><text>{{flatResult.monthlyPayment}}</text></view>
-      <view class="metric"><text>真实月利率</text><text>{{flatResult.actualMonthlyRate}}</text></view>
+      <view class="metric"><text>折算月利率</text><text>{{flatResult.actualMonthlyRate}}</text></view>
       <view class="metric"><text>名义年化</text><text>{{flatResult.actualAnnualNominalRate}}</text></view>
       <view class="metric"><text>复利年化</text><text>{{flatResult.actualAnnualEffectiveRate}}</text></view>
       <view class="metric"><text>总利息</text><text>{{flatResult.totalInterest}}</text></view>
@@ -386,7 +739,95 @@
     </view>
   </view>
 
+  <view wx:if="{{activeTool == 'carCost'}}" class="panel">
+    <text class="section-label">全款和分期到底差多少钱</text>
+    <view class="field">
+      <text class="label">全款车价</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="不含税费的全款成交价" type="digit" value="{{carCostForm.cashVehiclePrice}}" data-form="carCostForm" data-field="cashVehiclePrice" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="field">
+      <text class="label">分期车价</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="合同里的分期成交价" type="digit" value="{{carCostForm.installmentVehiclePrice}}" data-form="carCostForm" data-field="installmentVehiclePrice" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <text class="field-hint">全款车价和分期车价可不同；这里不自动套用购置税或保险政策，按你的发票、合同和缴费单填写。</text>
+    <view class="field">
+      <text class="label">优惠金额</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="没有填 0" type="digit" value="{{carCostForm.discount}}" data-form="carCostForm" data-field="discount" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="field">
+      <text class="label">购置相关税费</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="按实际缴费填写" type="digit" value="{{carCostForm.purchaseTax}}" data-form="carCostForm" data-field="purchaseTax" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="field">
+      <text class="label">保险</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="按实际保费填写" type="digit" value="{{carCostForm.insurance}}" data-form="carCostForm" data-field="insurance" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="field">
+      <text class="label">上牌费用</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="没有填 0" type="digit" value="{{carCostForm.registrationFee}}" data-form="carCostForm" data-field="registrationFee" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="field">
+      <text class="label">必选装/礼包</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="合同强制购买的项目" type="digit" value="{{carCostForm.requiredOptions}}" data-form="carCostForm" data-field="requiredOptions" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <text class="section-label inner">分期合同</text>
+    <view class="field">
+      <text class="label">实际用于购车</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="实际给车商的贷款金额" type="digit" value="{{carCostForm.purposeFunding}}" data-form="carCostForm" data-field="purposeFunding" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="field">
+      <text class="label">合同总还款</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="含本金和利息的总还款" type="digit" value="{{carCostForm.totalRepayment}}" data-form="carCostForm" data-field="totalRepayment" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="field">
+      <text class="label">前置费用</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="服务费、GPS 等" type="digit" value="{{carCostForm.upfrontFee}}" data-form="carCostForm" data-field="upfrontFee" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{carCostForm.upfrontFeePayment == 'deducted' ? 'active' : ''}}" data-form="carCostForm" data-field="upfrontFeePayment" data-value="deducted" bindtap="setFormValue">从放款中代扣</text>
+      <text class="{{carCostForm.upfrontFeePayment == 'cash' ? 'active' : ''}}" data-form="carCostForm" data-field="upfrontFeePayment" data-value="cash" bindtap="setFormValue">现金另付</text>
+    </view>
+    <view class="field">
+      <text class="label">周期费用合计</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="全期每月附加费合计" type="digit" value="{{carCostForm.periodicFee}}" data-form="carCostForm" data-field="periodicFee" bindinput="onInput" />
+      <text class="unit">元</text>
+    </view>
+    <text class="field-hint">“实际用于购车”与“前置费用支付方式”必须按资金流填写，避免把代扣费用重复算进首付和融资成本。</text>
+    <view class="{{carCostResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{carCostResult.error}}">{{carCostResult.error}}</view>
+    <view class="result-block">
+      <view class="result-summary" wx:if="{{carCostResult.summaryText}}">
+        <text class="result-summary-label">一句话结论</text>
+        <text class="result-summary-text">{{carCostResult.summaryText}}</text>
+      </view>
+      <view class="result-actions" wx:if="{{carCostResult.valid}}"><button class="result-copy-btn" bindtap="copySummary">复制结果</button></view>
+      <view class="result-grid">
+        <view class="metric"><text>全款总支出</text><text>{{carCostResult.cashTotal}}</text></view>
+        <view class="metric main"><text>分期总支出</text><text>{{carCostResult.installmentTotal}}</text></view>
+        <view class="metric"><text>分期车价差</text><text>{{carCostResult.pricePremium}}</text></view>
+        <view class="metric"><text>融资成本</text><text>{{carCostResult.financingCost}}</text></view>
+        <view class="metric"><text>分期首期现金</text><text>{{carCostResult.cashAtPurchase}}</text></view>
+        <view class="metric"><text>相对全款差额</text><text>{{carCostResult.differenceFromCash}}</text></view>
+      </view>
+    </view>
+  </view>
+
   <view wx:if="{{activeTool == 'prepay'}}" class="panel">
+    <text class="section-label">提前还款测算方式</text>
+    <view class="segmented two">
+      <text class="{{prepayForm.mode == 'quick' ? 'active' : ''}}" data-form="prepayForm" data-field="mode" data-value="quick" bindtap="setFormValue">快速估算</text>
+      <text class="{{prepayForm.mode == 'exact' ? 'active' : ''}}" data-form="prepayForm" data-field="mode" data-value="exact" bindtap="setFormValue">账单结息测算</text>
+    </view>
+    <block wx:if="{{prepayForm.mode == 'quick'}}">
     <view class="field">
       <text class="label">贷款本金</text>
       <input class="input" placeholder-class="input-placeholder" placeholder="输入原贷款金额" type="digit" value="{{prepayForm.principal}}" data-form="prepayForm" data-field="principal" bindinput="onInput" />
@@ -403,7 +844,7 @@
     </view>
     <view class="field">
       <text class="label">当前剩余本金</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="选填，优先使用银行余额" type="digit" value="{{prepayForm.currentBalance}}" data-form="prepayForm" data-field="currentBalance" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="选填，优先使用账单余额" type="digit" value="{{prepayForm.currentBalance}}" data-form="prepayForm" data-field="currentBalance" bindinput="onInput" />
       <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="field">
@@ -422,8 +863,8 @@
       <text class="unit">期</text>
     </view>
     <view class="field">
-      <text class="label">提前还款</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="准备提前还多少" type="digit" value="{{prepayForm.prepayAmount}}" data-form="prepayForm" data-field="prepayAmount" bindinput="onInput" />
+      <text class="label">提前归还本金</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="仅本金，不含利息和违约金" type="digit" value="{{prepayForm.prepayAmount}}" data-form="prepayForm" data-field="prepayAmount" bindinput="onInput" />
       <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="segmented two">
@@ -436,12 +877,12 @@
     </view>
     <view class="field" wx:if="{{prepayForm.penaltyMode == 'percent'}}">
       <text class="label">违约金比例</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="没有可留空" type="digit" value="{{prepayForm.penaltyPercent}}" data-form="prepayForm" data-field="penaltyPercent" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="确认没有请填 0；未核对留空" type="digit" value="{{prepayForm.penaltyPercent}}" data-form="prepayForm" data-field="penaltyPercent" bindinput="onInput" />
       <text class="unit">%</text>
     </view>
     <view class="field" wx:if="{{prepayForm.penaltyMode == 'amount'}}">
       <text class="label">违约金额</text>
-      <input class="input" placeholder-class="input-placeholder" placeholder="固定违约金" type="digit" value="{{prepayForm.penaltyAmount}}" data-form="prepayForm" data-field="penaltyAmount" bindinput="onInput" />
+      <input class="input" placeholder-class="input-placeholder" placeholder="确认没有请填 0；未核对留空" type="digit" value="{{prepayForm.penaltyAmount}}" data-form="prepayForm" data-field="penaltyAmount" bindinput="onInput" />
       <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
     </view>
     <view class="segmented two">
@@ -463,11 +904,170 @@
       <view class="metric"><text>还后本金</text><text>{{prepayResult.afterPrepayBalance}}</text></view>
       <view class="metric"><text>预计省利息</text><text>{{prepayResult.interestSaved}}</text></view>
       <view class="metric"><text>违约金</text><text>{{prepayResult.penalty}}</text></view>
-      <view class="metric main"><text>净省(扣违约金)</text><text class="{{prepayResult.netSavedNegative ? 'negative' : ''}}">{{prepayResult.netSaved}}</text></view>
+      <view class="metric main"><text>{{prepayResult.netSavedLabel}}</text><text class="{{prepayResult.netSavedNegative ? 'negative' : ''}}">{{prepayResult.penaltyKnown ? prepayResult.netSaved : prepayResult.interestSaved}}</text></view>
       <view class="metric"><text>新剩余期数</text><text>{{prepayResult.newRemainingMonths}}期</text></view>
       <view class="metric"><text>原月供</text><text>{{prepayResult.oldMonthlyPayment}}</text></view>
       <view class="metric"><text>新月供</text><text>{{prepayResult.newMonthlyPayment}}</text></view>
     </view>
+    </view>
+    </block>
+    <block wx:else>
+      <text class="field-hint">用于已有“当前剩余本金”和账单应计利息的场景。账单结息能提高本次结算金额的准确性，但后续计划仍是固定利率估算。</text>
+      <view class="segmented two">
+        <text class="{{prepayForm.unit == 'yuan' ? 'active' : ''}}" data-form="prepayForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+        <text class="{{prepayForm.unit == 'wan' ? 'active' : ''}}" data-form="prepayForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
+      </view>
+      <text class="section-label inner">原还款方式</text>
+      <view class="segmented two">
+        <text class="{{prepayForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="prepayForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
+        <text class="{{prepayForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="prepayForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
+      </view>
+      <view class="field">
+        <text class="label">当前剩余本金</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="以最新账单余额为准" type="digit" value="{{prepayForm.remainingPrincipal}}" data-form="prepayForm" data-field="remainingPrincipal" bindinput="onInput" />
+        <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
+      </view>
+      <view class="field">
+        <text class="label">剩余期数</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="还剩多少期" type="number" value="{{prepayForm.remainingMonths}}" data-form="prepayForm" data-field="remainingMonths" bindinput="onInput" />
+        <text class="unit">期</text>
+      </view>
+      <view class="field">
+        <text class="label">{{prepayForm.rateMode == 'monthly' ? '月利率%' : '年化%'}}</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="合同当前利率" type="digit" value="{{prepayForm.annualRate}}" data-form="prepayForm" data-field="annualRate" bindinput="onInput" />
+        <text class="unit">%</text>
+      </view>
+      <view class="segmented two">
+        <text class="{{prepayForm.rateMode == 'annual' ? 'active' : ''}}" data-form="prepayForm" data-field="rateMode" data-value="annual" bindtap="setFormValue">年化%</text>
+        <text class="{{prepayForm.rateMode == 'monthly' ? 'active' : ''}}" data-form="prepayForm" data-field="rateMode" data-value="monthly" bindtap="setFormValue">月利率%</text>
+      </view>
+      <view class="field">
+        <text class="label">提前归还本金</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="不含本期应计利息和违约金" type="digit" value="{{prepayForm.prepayPrincipal}}" data-form="prepayForm" data-field="prepayPrincipal" bindinput="onInput" />
+        <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
+      </view>
+      <text class="section-label inner">本期结息口径</text>
+      <view class="segmented two">
+        <text class="{{prepayForm.settlementMode == 'statement' ? 'active' : ''}}" data-form="prepayForm" data-field="settlementMode" data-value="statement" bindtap="setFormValue">已知账单利息</text>
+        <text class="{{prepayForm.settlementMode == 'daily' ? 'active' : ''}}" data-form="prepayForm" data-field="settlementMode" data-value="daily" bindtap="setFormValue">按日估算</text>
+      </view>
+      <view class="field" wx:if="{{prepayForm.settlementMode == 'statement'}}">
+        <text class="label">账单应计利息</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="从最新结清试算单抄入" type="digit" value="{{prepayForm.settlementInterest}}" data-form="prepayForm" data-field="settlementInterest" bindinput="onInput" />
+        <text class="unit">{{prepayForm.unit == 'wan' ? '万' : '元'}}</text>
+      </view>
+      <block wx:if="{{prepayForm.settlementMode == 'daily'}}">
+        <view class="field">
+          <text class="label">最近结息日</text>
+          <picker class="field-picker" mode="date" value="{{prepayForm.lastSettledDate}}" data-form="prepayForm" data-field="lastSettledDate" bindchange="onInput"><view class="picker-value">{{prepayForm.lastSettledDate || '请选择'}}</view></picker>
+          <text class="unit"></text>
+        </view>
+        <view class="field">
+          <text class="label">提前还款日</text>
+          <picker class="field-picker" mode="date" value="{{prepayForm.prepayDate}}" data-form="prepayForm" data-field="prepayDate" bindchange="onInput"><view class="picker-value">{{prepayForm.prepayDate || '请选择'}}</view></picker>
+          <text class="unit"></text>
+        </view>
+        <view class="segmented three">
+          <text class="{{prepayForm.dayCount == 'ACT_365F' ? 'active' : ''}}" data-form="prepayForm" data-field="dayCount" data-value="ACT_365F" bindtap="setFormValue">ACT/365F</text>
+          <text class="{{prepayForm.dayCount == 'ACT_360' ? 'active' : ''}}" data-form="prepayForm" data-field="dayCount" data-value="ACT_360" bindtap="setFormValue">ACT/360</text>
+          <text class="{{prepayForm.dayCount == '30_360' ? 'active' : ''}}" data-form="prepayForm" data-field="dayCount" data-value="30_360" bindtap="setFormValue">30/360</text>
+        </view>
+      </block>
+      <text class="section-label inner">违约金与处理方式</text>
+      <view class="segmented three">
+        <text class="{{prepayForm.penaltyType == 'fixed' ? 'active' : ''}}" data-form="prepayForm" data-field="penaltyType" data-value="fixed" bindtap="setFormValue">固定金额</text>
+        <text class="{{prepayForm.penaltyType == 'percentOfPrepay' ? 'active' : ''}}" data-form="prepayForm" data-field="penaltyType" data-value="percentOfPrepay" bindtap="setFormValue">提前本金%</text>
+        <text class="{{prepayForm.penaltyType == 'percentOfBalance' ? 'active' : ''}}" data-form="prepayForm" data-field="penaltyType" data-value="percentOfBalance" bindtap="setFormValue">剩余本金%</text>
+      </view>
+      <view class="field">
+        <text class="label">{{prepayForm.penaltyType == 'fixed' ? '违约金额' : '违约金比例'}}</text>
+        <input class="input" placeholder-class="input-placeholder" placeholder="确认没有请填 0；未核对留空" type="digit" value="{{prepayForm.penaltyValue}}" data-form="prepayForm" data-field="penaltyValue" bindinput="onInput" />
+        <text class="unit">{{prepayForm.penaltyType == 'fixed' ? (prepayForm.unit == 'wan' ? '万' : '元') : '%'}}</text>
+      </view>
+      <view class="segmented two">
+        <text class="{{prepayForm.reduceMode == 'term' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="term" bindtap="setFormValue">缩短期限</text>
+        <text class="{{prepayForm.reduceMode == 'payment' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="payment" bindtap="setFormValue">降低月供</text>
+      </view>
+      <view class="{{prepayResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{prepayResult.error}}">{{prepayResult.error}}</view>
+      <view class="result-block">
+        <view class="result-summary" wx:if="{{prepayResult.summaryText}}">
+          <text class="result-summary-label">一句话结论</text>
+          <text class="result-summary-text">{{prepayResult.summaryText}}</text>
+        </view>
+        <text class="field-hint" wx:if="{{prepayResult.scopeText}}">{{prepayResult.scopeText}}</text>
+        <view class="result-actions" wx:if="{{prepayResult.valid}}"><button class="result-copy-btn" bindtap="copySummary">复制结果</button></view>
+        <view class="result-grid">
+          <view class="metric"><text>当前剩余本金</text><text>{{prepayResult.remainingBalance}}</text></view>
+          <view class="metric"><text>提前还后本金</text><text>{{prepayResult.afterPrepayBalance}}</text></view>
+          <view class="metric"><text>本期应计利息</text><text>{{prepayResult.accruedInterest}}</text></view>
+          <view class="metric main"><text>本次结算预计支付</text><text>{{prepayResult.settlementTotal}}</text></view>
+          <view class="metric"><text>预计省后续利息</text><text>{{prepayResult.futureInterestSaved}}</text></view>
+          <view class="metric"><text>违约金</text><text>{{prepayResult.penalty}}</text></view>
+          <view class="metric main"><text>{{prepayResult.netSavedLabel}}</text><text class="{{prepayResult.netSavedNegative ? 'negative' : ''}}">{{prepayResult.penaltyKnown ? prepayResult.netFutureInterestSaved : prepayResult.futureInterestSaved}}</text></view>
+          <view class="metric"><text>新剩余期数</text><text>{{prepayResult.newRemainingMonths}}期</text></view>
+          <view class="metric"><text>原月供</text><text>{{prepayResult.oldMonthlyPayment}}</text></view>
+          <view class="metric"><text>新月供</text><text>{{prepayResult.newMonthlyPayment}}</text></view>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view wx:if="{{activeTool == 'lpr'}}" class="panel">
+    <text class="section-label">LPR 变动情景</text>
+    <view class="field">
+      <text class="label">贷款本金</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="输入贷款本金" type="digit" value="{{lprForm.principal}}" data-form="lprForm" data-field="principal" bindinput="onInput" />
+      <text class="unit">{{lprForm.unit == 'wan' ? '万' : '元'}}</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{lprForm.unit == 'yuan' ? 'active' : ''}}" data-form="lprForm" data-field="unit" data-value="yuan" bindtap="setFormValue">按元</text>
+      <text class="{{lprForm.unit == 'wan' ? 'active' : ''}}" data-form="lprForm" data-field="unit" data-value="wan" bindtap="setFormValue">按万</text>
+    </view>
+    <view class="field">
+      <text class="label">还款期数</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="例如 360" type="number" value="{{lprForm.months}}" data-form="lprForm" data-field="months" bindinput="onInput" />
+      <text class="unit">期</text>
+    </view>
+    <view class="segmented two">
+      <text class="{{lprForm.method == 'equalInstallment' ? 'active' : ''}}" data-form="lprForm" data-field="method" data-value="equalInstallment" bindtap="setFormValue">等额本息</text>
+      <text class="{{lprForm.method == 'equalPrincipal' ? 'active' : ''}}" data-form="lprForm" data-field="method" data-value="equalPrincipal" bindtap="setFormValue">等额本金</text>
+    </view>
+    <view class="field">
+      <text class="label">合同当前 5 年期 LPR</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="例如 3.6" type="digit" value="{{lprForm.initialLpr}}" data-form="lprForm" data-field="initialLpr" bindinput="onInput" />
+      <text class="unit">%</text>
+    </view>
+    <view class="field">
+      <text class="label">合同加点</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="例如 -30 或 0" type="text" value="{{lprForm.spreadBps}}" data-form="lprForm" data-field="spreadBps" bindinput="onInput" />
+      <text class="unit">bp</text>
+    </view>
+    <view class="field">
+      <text class="label">情景起始期数</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="例如第 13 期" type="number" value="{{lprForm.repriceMonth}}" data-form="lprForm" data-field="repriceMonth" bindinput="onInput" />
+      <text class="unit">期</text>
+    </view>
+    <view class="field">
+      <text class="label">假设调整后 5 年期 LPR</text>
+      <input class="input" placeholder-class="input-placeholder" placeholder="例如 3.3" type="digit" value="{{lprForm.scenarioLpr}}" data-form="lprForm" data-field="scenarioLpr" bindinput="onInput" />
+      <text class="unit">%</text>
+    </view>
+    <text class="field-hint">仅适用于以 5 年期 LPR 定价的合同。本工具是手动情景，不联网获取 LPR；实际重定价以合同和最新还款计划为准。</text>
+    <view class="{{lprResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{lprResult.error}}">{{lprResult.error}}</view>
+    <view class="result-block">
+      <view class="result-summary" wx:if="{{lprResult.summaryText}}">
+        <text class="result-summary-label">一句话结论</text>
+        <text class="result-summary-text">{{lprResult.summaryText}}</text>
+      </view>
+      <view class="result-actions" wx:if="{{lprResult.valid}}"><button class="result-copy-btn" bindtap="copySummary">复制结果</button></view>
+      <view class="result-grid">
+        <view class="metric"><text>当前情景利率</text><text>{{lprResult.initialRate}}</text></view>
+        <view class="metric"><text>重定价后利率</text><text>{{lprResult.scenarioRate}}</text></view>
+        <view class="metric"><text>首期还款</text><text>{{lprResult.firstPayment}}</text></view>
+        <view class="metric"><text>重定价当期还款</text><text>{{lprResult.repricePayment}}</text></view>
+        <view class="metric main"><text>重定价当期变化</text><text>{{lprResult.paymentChange}}</text></view>
+        <view class="metric"><text>总利息</text><text>{{lprResult.totalInterest}}</text></view>
+      </view>
     </view>
   </view>
 
@@ -475,7 +1075,7 @@
     <view class="schedule-head">
       <text class="schedule-title">还款明细</text>
       <view class="schedule-meta">
-        <picker mode="date" fields="month" value="{{scheduleStartYm}}" bindchange="setScheduleStart">
+        <picker class="field-picker" mode="date" fields="month" value="{{scheduleStartYm}}" bindchange="setScheduleStart">
           <text class="schedule-pill">{{scheduleStartYm ? '首期 ' + scheduleStartYm : '设首期年月'}}</text>
         </picker>
         <text class="schedule-count">共 {{scheduleTotalCount}} 期</text>
@@ -487,20 +1087,21 @@
     <scroll-view class="table-scroll" scroll-x>
       <view class="table-inner">
         <view class="table-head">
-          <text>月份</text><text>还款</text><text>本金</text><text>利息</text><text>余额</text>
+          <text class="table-cell first">月份</text><text class="table-cell amount">还款</text><text class="table-cell amount">本金</text><text class="table-cell amount">利息</text><text class="table-cell amount">余额</text>
         </view>
         <view class="table-row" wx:for="{{activeScheduleDisplay}}" wx:key="month">
-          <text>{{item.label}}</text>
-          <text>{{item.payment}}</text>
-          <text>{{item.principal}}</text>
-          <text>{{item.interest}}</text>
-          <text>{{item.balance}}</text>
+          <text class="table-cell first">{{item.label}}</text>
+          <text class="table-cell amount">{{item.payment}}</text>
+          <text class="table-cell amount">{{item.principal}}</text>
+          <text class="table-cell amount">{{item.interest}}</text>
+          <text class="table-cell amount">{{item.balance}}</text>
         </view>
       </view>
     </scroll-view>
   </view>
 
   <view class="assumption-note">
-    <text>按固定利率、等间隔月度还款测算；首期年月只用于明细标记，不参与按日计息。非整月首期、利率调整及未录入费用可能造成差异，实际以合同和正式还款计划为准。</text>
+    <text>默认按等间隔月度还款测算。LPR 情景和提前还款仅按已录入合同、账单和日计数口径估算；未录入费用、实际重定价日和非整月计息都可能造成差异，最终以合同、最新还款计划和结清试算单为准。</text>
+  </view>
   </view>
 </view>

@@ -50,6 +50,10 @@
       },
       {
         "type": "file",
+        "value": "design-qa.md"
+      },
+      {
+        "type": "file",
         "value": "package.json"
       },
       {

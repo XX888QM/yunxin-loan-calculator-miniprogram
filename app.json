@@ -3,6 +3,7 @@
     "pages/index/index"
   ],
   "window": {
+    "navigationStyle": "custom",
     "navigationBarTitleText": "云鑫真实贷款计算器",
     "navigationBarBackgroundColor": "#0b1f44",
     "navigationBarTextStyle": "white",
