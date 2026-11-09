@@ -297,32 +297,30 @@ function sanitizeEntry(input, forSave) {
 }
 
 function readStoredItems(storage, key) {
-  if (!storage) return []
+  if (!storage) return { items: [], error: 'storageUnavailable' }
   var raw
   try {
     raw = storage.getStorageSync(key)
   } catch (error) {
-    return []
+    return { items: [], error: 'readFailed' }
   }
-  if (raw === undefined || raw === null || raw === '') return []
+  if (raw === undefined || raw === null || raw === '') return { items: [], error: '' }
 
   var value = raw
   if (typeof raw === 'string') {
     try {
       value = JSON.parse(raw)
     } catch (error) {
-      return []
+      return { items: [], error: 'invalidData' }
     }
   }
   if (!isPlainObject(value) || Number(value.schemaVersion) !== SCHEMA_VERSION || !Array.isArray(value.items)) {
-    return []
+    return { items: [], error: 'incompatibleData' }
   }
-  return value.items
+  return { items: value.items, error: '' }
 }
 
-function load(storage, key) {
-  var api = resolveStorage(storage)
-  var items = readStoredItems(api, normalizeStorageKey(key))
+function sanitizeStoredItems(items) {
   var result = []
   var seen = {}
 
@@ -334,6 +332,26 @@ function load(storage, key) {
     }
   }
   return result
+}
+
+function hasIncompatibleItem(items) {
+  for (var i = 0; i < items.length; i += 1) {
+    if (!sanitizeEntry(items[i], false)) return true
+  }
+  return false
+}
+
+function load(storage, key) {
+  return inspect(storage, key).items
+}
+
+function inspect(storage, key) {
+  var api = resolveStorage(storage)
+  var stored = readStoredItems(api, normalizeStorageKey(key))
+  if (stored.error) return { ok: false, items: [], error: stored.error }
+  var items = sanitizeStoredItems(stored.items)
+  if (hasIncompatibleItem(stored.items)) return { ok: false, items: items, error: 'incompatibleItem' }
+  return { ok: true, items: items, error: '' }
 }
 
 function write(storage, key, items) {
@@ -349,46 +367,74 @@ function write(storage, key, items) {
   }
 }
 
-function save(entry, storage, key) {
+function saveResult(entry, storage, key) {
   var api = resolveStorage(storage)
   var item = sanitizeEntry(entry, true)
-  if (!api) return []
-  var items = load(api, key)
-  if (!item) return items
+  if (!api) return { ok: false, items: [], error: 'storageUnavailable' }
+  var storageKey = normalizeStorageKey(key)
+  var stored = readStoredItems(api, storageKey)
+  if (stored.error) return { ok: false, items: [], error: stored.error }
+  var items = sanitizeStoredItems(stored.items)
+  if (hasIncompatibleItem(stored.items)) return { ok: false, items: items, error: 'incompatibleItem' }
+  if (!item) return { ok: false, items: items, error: 'invalidEntry' }
 
   var next = [item]
   for (var i = 0; i < items.length && next.length < MAX_ITEMS; i += 1) {
     if (items[i].id !== item.id) next.push(items[i])
   }
-  if (!write(api, normalizeStorageKey(key), next)) return items
-  return next
+  if (!write(api, storageKey, next)) return { ok: false, items: items, error: 'writeFailed' }
+  return { ok: true, items: next, error: '' }
+}
+
+function save(entry, storage, key) {
+  return saveResult(entry, storage, key).items
+}
+
+function removeResult(id, storage, key) {
+  var api = resolveStorage(storage)
+  var safe = safeId(id)
+  if (!api) return { ok: false, items: [], error: 'storageUnavailable' }
+  var storageKey = normalizeStorageKey(key)
+  var stored = readStoredItems(api, storageKey)
+  if (stored.error) return { ok: false, items: [], error: stored.error }
+  var items = sanitizeStoredItems(stored.items)
+  if (hasIncompatibleItem(stored.items)) return { ok: false, items: items, error: 'incompatibleItem' }
+  if (!safe) return { ok: false, items: items, error: 'invalidId' }
+  var next = items.filter(function (item) { return item.id !== safe })
+  if (next.length === items.length) return { ok: false, items: items, error: 'notFound' }
+  if (!write(api, storageKey, next)) return { ok: false, items: items, error: 'writeFailed' }
+  return { ok: true, items: next, error: '' }
 }
 
 function remove(id, storage, key) {
-  var api = resolveStorage(storage)
-  var safe = safeId(id)
-  var items = load(api, key)
-  if (!safe) return items
-  var next = items.filter(function (item) { return item.id !== safe })
-  if (next.length === items.length) return items
-  if (!write(api, normalizeStorageKey(key), next)) return items
-  return next
+  return removeResult(id, storage, key).items
 }
 
 function clear(storage, key) {
+  return clearResult(storage, key).items
+}
+
+function clearResult(storage, key) {
   var api = resolveStorage(storage)
   var storageKey = normalizeStorageKey(key)
-  if (!api) return []
+  var before = inspect(api, storageKey)
+  if (!api || before.error === 'storageUnavailable' || before.error === 'readFailed') {
+    return { ok: false, items: before.items, error: before.error || 'storageUnavailable' }
+  }
   try {
     if (typeof api.removeStorageSync === 'function') {
       api.removeStorageSync(storageKey)
     } else if (!write(api, storageKey, [])) {
-      return load(api, storageKey)
+      return { ok: false, items: load(api, storageKey), error: 'writeFailed' }
     }
   } catch (error) {
-    return load(api, storageKey)
+    return { ok: false, items: load(api, storageKey), error: 'writeFailed' }
   }
-  return []
+  var after = readStoredItems(api, storageKey)
+  if (after.error || after.items.length) {
+    return { ok: false, items: after.error ? [] : sanitizeStoredItems(after.items), error: after.error || 'writeFailed' }
+  }
+  return { ok: true, items: [], error: '' }
 }
 
 module.exports = {
@@ -396,8 +442,12 @@ module.exports = {
   MAX_ITEMS: MAX_ITEMS,
   DEFAULT_STORAGE_KEY: DEFAULT_STORAGE_KEY,
   load: load,
+  inspect: inspect,
   save: save,
+  saveResult: saveResult,
   remove: remove,
+  removeResult: removeResult,
   clear: clear,
+  clearResult: clearResult,
   sanitizeEntry: function (entry) { return sanitizeEntry(entry, true) }
 }

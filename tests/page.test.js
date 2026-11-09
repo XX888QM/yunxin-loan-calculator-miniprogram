@@ -8,6 +8,12 @@ let writtenFile
 let openedFile
 let shareMenuOptions
 let toastOptions
+const removedFilePaths = []
+let openDocumentShouldFail = false
+let modalConfirm = true
+let lastModalOptions
+let readdirShouldFail = false
+const userDataFiles = ['loan-quote-111.pdf', 'loan-schedule-222.pdf', 'manual.pdf', 'loan-quote-note.pdf']
 const localStorage = {}
 global.wx = {
   env: { USER_DATA_PATH: '/tmp' },
@@ -20,11 +26,20 @@ global.wx = {
       writeFile(options) {
         writtenFile = options
         options.success()
+      },
+      unlink(options) {
+        removedFilePaths.push(options.filePath)
+        if (options.success) options.success()
+      },
+      readdir(options) {
+        if (readdirShouldFail) options.fail()
+        else options.success({ files: userDataFiles })
       }
     }
   },
   openDocument(options) {
     openedFile = options
+    if (openDocumentShouldFail) options.fail()
   },
   getStorageSync(key) {
     return localStorage[key]
@@ -39,7 +54,8 @@ global.wx = {
     toastOptions = options
   },
   showModal(options) {
-    options.success({ confirm: true, cancel: false })
+    lastModalOptions = options
+    options.success({ confirm: modalConfirm, cancel: !modalConfirm })
   }
 }
 global.Page = function (config) {
@@ -239,6 +255,22 @@ page.exportSchedulePdf()
 assert.ok(writtenFile.filePath.endsWith('.pdf'))
 assert.ok(writtenFile.data instanceof ArrayBuffer)
 assert.strictEqual(openedFile.fileType, 'pdf')
+removedFilePaths.length = 0
+openDocumentShouldFail = true
+page.exportSchedulePdf()
+assert.deepStrictEqual(removedFilePaths, [writtenFile.filePath])
+openDocumentShouldFail = false
+removedFilePaths.length = 0
+modalConfirm = false
+page.confirmClearExportedPdfs()
+assert.deepStrictEqual(removedFilePaths, [])
+modalConfirm = true
+page.confirmClearExportedPdfs()
+assert.deepStrictEqual(removedFilePaths, ['/tmp/loan-quote-111.pdf', '/tmp/loan-schedule-222.pdf'])
+readdirShouldFail = true
+page.confirmClearExportedPdfs()
+assert.strictEqual(toastOptions.title, '读取导出文件失败')
+readdirShouldFail = false
 
 const friendShare = page.onShareAppMessage()
 assert.strictEqual(friendShare.title, '云鑫真实贷款计算器')
@@ -253,17 +285,29 @@ const wxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 
 assert.ok(!wxml.includes('\u5398'))
 assert.ok(wxml.includes('月份'))
 assert.ok(wxml.includes('bindtap="exportSchedulePdf"'))
+assert.ok(wxml.includes('填写与原计划不一致的账单余额时，按该余额、当前利率和剩余期数重建后续估算计划'))
+assert.ok(wxml.includes('{{prepayResult.oldMonthlyPaymentLabel}}'))
+assert.ok(wxml.includes('bindtap="confirmClearExportedPdfs"'))
+assert.ok(wxml.includes('bindtap="confirmRecoverQuoteHistory"'))
+assert.ok(wxml.includes('高利率、长期且本金偿还较少时，逐期四舍五入可能明显影响省息和期数，以银行最新试算为准。'))
+assert.ok(wxml.includes('<view class="history-empty" wx:if="{{quoteHistory.length === 0 && !quoteHistoryRecovery}}">'))
 assert.ok(wxml.includes('open-type="share"'))
 assert.ok(wxml.includes('>分享</button>'))
 assert.ok(wxml.includes('>导出PDF</button>'))
 
 const wxss = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxss'), 'utf8')
+const projectConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../project.config.json'), 'utf8'))
 assert.ok(wxss.includes('grid-template-columns: 106rpx repeat(4, minmax(0, 1fr))'))
 assert.ok(!wxss.includes('width: 1208rpx'))
 assert.ok(wxss.includes('.schedule-meta .field-picker'))
 assert.ok(wxss.includes('flex-wrap: nowrap'))
 assert.ok(wxss.includes('width: 76rpx'))
 assert.ok(wxss.includes('width: 132rpx'))
+assert.ok(projectConfig.packOptions.ignore.some((item) => item.type === 'file' && item.value === 'AGENTS.md'))
+assert.ok(projectConfig.packOptions.ignore.some((item) => item.type === 'folder' && item.value === '.cursor'))
+assert.ok(projectConfig.packOptions.ignore.some((item) => item.type === 'file' && item.value === 'pages/index/CLAUDE.local.md'))
+assert.ok(projectConfig.packOptions.ignore.some((item) => item.type === 'file' && item.value === 'tests/CLAUDE.local.md'))
+assert.ok(projectConfig.packOptions.ignore.some((item) => item.type === 'file' && item.value === 'utils/CLAUDE.local.md'))
 
 
 
@@ -340,7 +384,35 @@ const equalPrincipalPrepay = page.buildPrepayResult()
 assert.strictEqual(equalPrincipalPrepay.valid, true)
 assert.strictEqual(equalPrincipalPrepay.remainingBalance, '666666.67')
 page.data.prepayForm.currentBalance = '70'
-assert.strictEqual(page.buildPrepayResult().remainingBalance, '700000.00')
+assert.strictEqual(page.buildPrepayResult().valid, true)
+
+// 降息后账单余额与按当前利率从头推算不同时，快速估算应以账单余额重建后续计划。
+for (const method of ['equalInstallment', 'equalPrincipal']) {
+  for (const reduceMode of ['term', 'payment']) {
+    page.data.prepayForm = {
+      principal: '100', months: '360', annualRate: '3.1', rateMode: 'annual',
+      paidMonths: '36', prepayAmount: '10', reduceMode,
+      method, currentBalance: '95.263897',
+      penaltyMode: 'percent', penaltyPercent: '', penaltyAmount: '', unit: 'wan'
+    }
+    const rebuiltBalancePrepay = page.buildPrepayResult()
+    assert.strictEqual(rebuiltBalancePrepay.valid, true)
+    assert.strictEqual(rebuiltBalancePrepay.remainingBalance, '952638.97')
+    assert.strictEqual(rebuiltBalancePrepay.rebuiltFromCurrentBalance, true)
+    assert.strictEqual(rebuiltBalancePrepay.oldMonthlyPaymentLabel, '按当前余额估算月供')
+    assert.ok(rebuiltBalancePrepay.scopeText.includes('最新还款计划'))
+    assert.ok(rebuiltBalancePrepay.copyText.includes('按账单余额重建后续计划'))
+  }
+}
+page.data.prepayForm.prepayAmount = '96'
+const balanceExceededPrepay = page.buildPrepayResult()
+assert.strictEqual(balanceExceededPrepay.valid, false)
+assert.ok(balanceExceededPrepay.error.includes('不能超过剩余本金'))
+page.data.prepayForm.prepayAmount = '10'
+page.data.prepayForm.currentBalance = '100.000001'
+const originalPrincipalExceededBalance = page.buildPrepayResult()
+assert.strictEqual(originalPrincipalExceededBalance.valid, false)
+assert.strictEqual(originalPrincipalExceededBalance.error, '当前剩余本金不能超过原贷款本金')
 
 
 // 其他表单的万元/元切换也必须保持实际金额
@@ -667,6 +739,25 @@ assert.strictEqual(page.data.quoteStep, 4)
 page.openHistory()
 page.confirmRemoveQuoteHistory({ currentTarget: { dataset: { id: savedQuoteId } } })
 assert.strictEqual(page.data.quoteHistory.length, 0)
+localStorage['yunxin-loan-history-v1'] = 'not json'
+page.data.quoteResult = completeQuote
+page.saveQuoteReport()
+assert.strictEqual(toastOptions.title, '本机历史数据异常，已阻止覆盖')
+assert.strictEqual(localStorage['yunxin-loan-history-v1'], 'not json')
+page.removeQuoteHistory({ currentTarget: { dataset: { id: 'missing' } } })
+assert.strictEqual(toastOptions.title, '本机历史数据异常，已阻止覆盖')
+assert.strictEqual(localStorage['yunxin-loan-history-v1'], 'not json')
+page.openHistory()
+assert.strictEqual(page.data.quoteHistoryRecovery, true)
+modalConfirm = false
+page.confirmRecoverQuoteHistory()
+assert.ok(lastModalOptions.content.includes('全部本机历史'))
+assert.ok(lastModalOptions.content.includes('可能正常的记录'))
+assert.strictEqual(localStorage['yunxin-loan-history-v1'], 'not json')
+modalConfirm = true
+page.confirmRecoverQuoteHistory()
+assert.strictEqual(localStorage['yunxin-loan-history-v1'], undefined)
+assert.strictEqual(page.data.quoteHistoryRecovery, false)
 page.openTools()
 assert.strictEqual(page.data.screenMode, 'tools')
 writtenFile = undefined
@@ -736,6 +827,90 @@ const unknownPenaltyExact = page.buildPrepayResult()
 assert.strictEqual(unknownPenaltyExact.valid, true)
 assert.strictEqual(unknownPenaltyExact.penaltyKnown, false)
 assert.ok(unknownPenaltyExact.scopeText.includes('违约金尚未核对'))
+
+page.data.prepayForm = {
+  mode: 'quick', unit: 'yuan', method: 'equalInstallment', principal: '100000',
+  months: '12', annualRate: '5', rateMode: 'annual', paidMonths: '6',
+  prepayAmount: '90000', currentBalance: '', penaltyMode: 'percent',
+  penaltyPercent: '0', penaltyAmount: '', reduceMode: 'term'
+}
+assert.strictEqual(page.buildPrepayResult().valid, false)
+
+page.data.prepayForm.prepayAmount = '1000'
+page.data.prepayForm.currentBalance = '100000'
+const rebuiltHighBalance = page.buildPrepayResult()
+assert.strictEqual(rebuiltHighBalance.valid, true)
+assert.strictEqual(rebuiltHighBalance.rebuiltFromCurrentBalance, true)
+assert.strictEqual(rebuiltHighBalance.oldMonthlyPaymentLabel, '按当前余额估算月供')
+page.data.prepayForm.paidMonths = '12'
+assert.strictEqual(page.buildPrepayResult().valid, false)
+
+page.data.prepayForm = {
+  mode: 'quick', unit: 'yuan', method: 'equalInstallment', principal: '100000',
+  months: '600', annualRate: '36', rateMode: 'annual', paidMonths: '1',
+  prepayAmount: '1000', currentBalance: '', penaltyMode: 'percent',
+  penaltyPercent: '0', penaltyAmount: '', reduceMode: 'term'
+}
+const unreliableQuickPrepay = page.buildPrepayResult()
+assert.strictEqual(unreliableQuickPrepay.valid, false)
+assert.strictEqual(unreliableQuickPrepay.error, '当前金额、利率和期数组合无法可靠生成还款计划，请核对输入')
+
+// 只拦截无法逐期偿还的计划；正常的小额长期贷款允许末期按分调整。
+page.data.loanType = 'home'
+page.data.paymentForm = {
+  principal: '100000', months: '600', annualRate: '36', rateMode: 'annual',
+  method: 'equalInstallment', unit: 'yuan', inputMode: 'loan'
+}
+assert.strictEqual(page.buildPaymentResult().valid, false)
+page.data.paymentForm.annualRate = '24'
+assert.strictEqual(page.buildPaymentResult().valid, true)
+page.data.paymentForm.principal = '10000'
+page.data.paymentForm.months = '360'
+page.data.paymentForm.annualRate = '4.9'
+assert.strictEqual(page.buildPaymentResult().valid, true)
+page.data.comboForm = {
+  commercialPrincipal: '30000', commercialRate: '3.1', fundPrincipal: '1000000', fundRate: '2.6',
+  years: '30', rateMode: 'annual', method: 'equalInstallment', unit: 'yuan'
+}
+assert.strictEqual(page.buildComboResult().valid, true)
+page.data.paymentForm.principal = '1'
+page.data.paymentForm.months = '360'
+page.data.paymentForm.annualRate = '3.1'
+assert.strictEqual(page.buildPaymentResult().valid, false)
+page.data.paymentForm.principal = '1000000'
+assert.strictEqual(page.buildPaymentResult().valid, true)
+page.data.comboForm = {
+  commercialPrincipal: '100000', commercialRate: '36', fundPrincipal: '', fundRate: '',
+  years: '50', rateMode: 'annual', method: 'equalInstallment', unit: 'yuan'
+}
+assert.strictEqual(page.buildComboResult().valid, false)
+page.data.budgetForm = { monthlyBudget: '3000', months: '600', annualRate: '36', rateMode: 'annual', method: 'equalInstallment' }
+assert.strictEqual(page.buildBudgetResult().valid, false)
+page.data.lprForm = {
+  principal: '100000', months: '600', initialLpr: '36', scenarioLpr: '36',
+  spreadBps: '0', repriceMonth: '13', method: 'equalInstallment', unit: 'yuan'
+}
+assert.strictEqual(page.buildLprResult().valid, false)
+page.data.lprForm = {
+  principal: '10000', months: '360', initialLpr: '4.9', scenarioLpr: '4.9',
+  spreadBps: '0', repriceMonth: '2', method: 'equalInstallment', unit: 'yuan'
+}
+assert.strictEqual(page.buildLprResult().valid, true)
+page.data.prepayForm = {
+  mode: 'exact', unit: 'yuan', method: 'equalInstallment', remainingPrincipal: '100000',
+  remainingMonths: '600', annualRate: '36', rateMode: 'annual', prepayPrincipal: '1000',
+  settlementMode: 'statement', settlementInterest: '0', penaltyType: 'fixed', penaltyValue: '0', reduceMode: 'payment'
+}
+assert.strictEqual(page.buildPrepayResult().valid, false)
+
+page.data.quoteForm = {
+  purpose: 'car', structure: 'equalPayment', feeStatus: 'known', principal: '1000',
+  months: '1', monthlyPayment: '950', upfrontFee: '100', periodicFee: '',
+  claimedRate: '', claimedRateMode: 'annual'
+}
+const unusualQuote = page.buildQuoteResult()
+assert.strictEqual(unusualQuote.valid, false)
+assert.ok(unusualQuote.error.includes('暂不支持'))
 
 const upgradedWxml = fs.readFileSync(path.join(__dirname, '../pages/index/index.wxml'), 'utf8')
 assert.ok(upgradedWxml.includes('quote-compare-add'))

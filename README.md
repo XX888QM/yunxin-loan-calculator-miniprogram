@@ -22,12 +22,16 @@
 - 平息换算同时展示折算月利率、名义年化和复利年化
 - 提前还款支持等额本息、等额本金、比例/固定违约金，以及可选的当前剩余本金
 - 提前还款分“快速估算”和“账单/按日估算”：后者可录入剩余本金、账单应计利息，或按 ACT/365F、ACT/360、30/360 估算应计利息
+- 快速提前还款会拦截已还满期、余额超过原本金和提前还款超出剩余本金；账单余额与推算不同时，按当前余额、利率和剩余期数重建计划估算，以银行账单为准
 - 报价体检会把前置费用、每期费用、尾款一起放入现金流；费用未确认时只给已录入项目的下限，不能加入横向对比
 - 报价可手动临时加入对比，最多 3 份；只应比较同一用途且费用已确认的报价，不自动给出“哪份更划算”的结论
 - 车贷落地总价会分开显示全款价、分期价、优惠、税费、保险、上牌、必选装，以及前置费用是现金另付还是从放款中代扣
 - LPR 情景由用户手动填写合同加点、重定价期和假设 LPR；不联网查询实时 LPR
 - 支持手动保存最多 30 份报价体检记录到本机；不保存姓名、手机号、证件号等身份信息
+- 历史记录读取失败、损坏或版本不兼容时，禁止保存或删除单条以避免覆盖原数据
+- 可读取但损坏或不兼容的历史可在记录页确认清空后重新保存；读取失败时保留原数据
 - 支持还款明细和报价体检报告的本地 PDF 导出，以及自愿分享
+- 历史页可经确认清理本机导出的 PDF；清理前应完成分享或另存
 - 首页底部显示当前小程序版本号
 - 页面明细默认展示前 12 期，完整明细导出 PDF；结果区提供一句话结论与复制
 - 各工具提供场景说明与一键示例；首付/尾款比例即时显示约合金额
@@ -47,6 +51,7 @@
 - LPR 情景利率 = 手动填写的 LPR + 合同加点；在设定的重定价期按剩余本金重新测算。
 - 提前还款净省 = 节省利息 − 违约金，结果可能为负。
 - 账单应计利息只替代本次结算期的利息；之后的还款计划仍按固定利率和剩余期数估算。
+- 小额、长期或高利率组合如导致按分计算的还款计划严重偏离，页面停止测算并提示核对；不可用作机构正式计划。
 - 首期年月只用于明细标签，不参与普通月供测算的按日计息。
 
 ## 适用边界
@@ -59,7 +64,7 @@
 - 不接入后台服务。
 - 不上传用户输入的金额、利率或还款明细。
 - 报价记录只在本机存储，最多 30 条；保存前会过滤姓名、手机号、证件号、邮箱和地址等身份信息。
-- PDF 由小程序本地生成，只写入用户本机临时目录。
+- PDF 在小程序本地用户文件目录生成，不上传。
 - 开源仓库中的 `project.config.json` 使用 `touristappid`；真实 AppID 应放在本地未提交的 `project.private.config.json`。
 
 ## 开发
@@ -129,7 +134,7 @@ Calculations assume a fixed rate and equally spaced monthly payments. LPR is a m
 - No login or backend service
 - No upload of entered amounts, rates, or schedules
 - Quote history is stored locally only (up to 30 reports) and filters identity-like text before saving
-- PDFs are generated locally in the Mini Program temporary directory
+- PDFs are generated locally in the Mini Program user file directory
 - The public project uses `touristappid`; the real AppID remains in the uncommitted private config
 
 ## Development

@@ -108,6 +108,9 @@ assert.strictEqual(history.load(inheritedNameStorage)[0].id, 'toString')
 // 坏 JSON、错误 schema、坏日期和坏记录不抛错；同一批中的有效记录仍可读。
 storage.setStorageSync(key, 'not json')
 assert.deepStrictEqual(history.load(storage), [])
+assert.strictEqual(history.inspect(storage).error, 'invalidData')
+assert.strictEqual(history.clearResult(storage).ok, true)
+assert.strictEqual(storage.getStorageSync(key), undefined)
 storage.setStorageSync(key, JSON.stringify({
   schemaVersion: history.SCHEMA_VERSION,
   items: [
@@ -120,6 +123,45 @@ storage.setStorageSync(key, JSON.stringify({
 const repaired = history.load(storage)
 assert.strictEqual(repaired.length, 1)
 assert.strictEqual(repaired[0].id, 'valid')
+
+// 读取失败、损坏或版本不兼容时，保存新报告不能覆盖原始字节；用户应得到明确失败结果。
+const protectedStorage = createMemoryStorage()
+history.save(entry('safe-old', '2026-08-07T00:00:00.000Z'), protectedStorage)
+const validStoredRaw = protectedStorage.data[key]
+protectedStorage.data[key] = 'not json'
+const corruptedSave = history.saveResult(entry('blocked-corrupt', '2026-08-07T00:01:00.000Z'), protectedStorage)
+assert.strictEqual(corruptedSave.ok, false)
+assert.strictEqual(corruptedSave.error, 'invalidData')
+assert.strictEqual(protectedStorage.data[key], 'not json')
+
+protectedStorage.data[key] = JSON.stringify({ schemaVersion: 999, items: [] })
+const incompatibleSave = history.saveResult(entry('blocked-schema', '2026-08-07T00:02:00.000Z'), protectedStorage)
+assert.strictEqual(incompatibleSave.ok, false)
+assert.strictEqual(incompatibleSave.error, 'incompatibleData')
+assert.strictEqual(protectedStorage.data[key], JSON.stringify({ schemaVersion: 999, items: [] }))
+
+protectedStorage.data[key] = JSON.stringify({
+  schemaVersion: history.SCHEMA_VERSION,
+  items: [Object.assign({ schemaVersion: 999 }, entry('future-row', '2026-08-07T00:00:00.000Z'))]
+})
+const incompatibleItemSave = history.saveResult(entry('blocked-row', '2026-08-07T00:03:00.000Z'), protectedStorage)
+assert.strictEqual(incompatibleItemSave.ok, false)
+assert.strictEqual(incompatibleItemSave.error, 'incompatibleItem')
+assert.ok(protectedStorage.data[key].includes('future-row'))
+const incompatibleItemRemove = history.removeResult('future-row', protectedStorage)
+assert.strictEqual(incompatibleItemRemove.ok, false)
+assert.strictEqual(incompatibleItemRemove.error, 'incompatibleItem')
+assert.ok(protectedStorage.data[key].includes('future-row'))
+
+protectedStorage.data[key] = validStoredRaw
+protectedStorage.getStorageSync = function () { throw new Error('read failed') }
+const readFailureSave = history.saveResult(entry('blocked-read', '2026-08-07T00:04:00.000Z'), protectedStorage)
+assert.strictEqual(readFailureSave.ok, false)
+assert.strictEqual(readFailureSave.error, 'readFailed')
+assert.strictEqual(protectedStorage.data[key], validStoredRaw)
+assert.strictEqual(history.inspect(protectedStorage).error, 'readFailed')
+assert.strictEqual(history.clearResult(protectedStorage).ok, false)
+assert.strictEqual(history.clearResult(protectedStorage).error, 'readFailed')
 
 // 35 条：只留最新 30 条，重复 id 覆盖旧条目。
 history.clear(storage)

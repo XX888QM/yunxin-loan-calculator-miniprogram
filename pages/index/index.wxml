@@ -316,7 +316,15 @@
     <view class="history-content">
       <view class="history-heading-row">
         <text class="history-heading">已保存的报告</text>
-        <button class="history-clear" wx:if="{{quoteHistory.length}}" bindtap="confirmClearQuoteHistory">清空全部</button>
+        <view class="history-heading-actions">
+          <button class="history-export-clear" bindtap="confirmClearExportedPdfs">清理导出PDF</button>
+          <button class="history-clear" wx:if="{{quoteHistory.length}}" bindtap="confirmClearQuoteHistory">清空全部</button>
+        </view>
+      </view>
+      <text class="history-export-note">导出文件仅保存在本机；清理前请完成分享或保存。</text>
+      <view wx:if="{{quoteHistoryRecovery}}" class="history-recovery">
+        <text class="history-recovery-text">本机历史数据异常，已阻止覆盖。清空异常历史后可重新保存。</text>
+        <button class="history-clear" bindtap="confirmRecoverQuoteHistory">清空异常历史</button>
       </view>
       <view class="history-list" wx:if="{{quoteHistory.length}}">
         <view class="history-item" wx:for="{{quoteHistory}}" wx:key="id">
@@ -335,7 +343,7 @@
           </view>
         </view>
       </view>
-      <view class="history-empty" wx:else>
+      <view class="history-empty" wx:if="{{quoteHistory.length === 0 && !quoteHistoryRecovery}}">
         <image class="history-empty-logo" src="/assets/logo.png" mode="aspectFit" />
         <text class="history-empty-title">还没有保存的体检报告</text>
         <text class="history-empty-text">完成一次报价体检后，可以把结果保存到这里。</text>
@@ -890,12 +898,15 @@
       <text class="{{prepayForm.reduceMode == 'payment' ? 'active' : ''}}" data-form="prepayForm" data-field="reduceMode" data-value="payment" bindtap="setFormValue">降低月供</text>
     </view>
     <text class="field-hint">默认按最近一期还款完成后立即提前还款估算，不包含两个还款日之间的按日利息。</text>
+    <text class="field-hint">填写与原计划不一致的账单余额时，按该余额、当前利率和剩余期数重建后续估算计划；实际以最新还款计划和结清试算单为准。</text>
+    <text class="field-hint">高利率、长期且本金偿还较少时，逐期四舍五入可能明显影响省息和期数，以银行最新试算为准。</text>
     <view class="{{prepayResult.errorLevel == 'error' ? 'form-error' : 'form-hint'}}" wx:if="{{prepayResult.error}}">{{prepayResult.error}}</view>
     <view class="result-block">
     <view class="result-summary" wx:if="{{prepayResult.summaryText}}">
       <text class="result-summary-label">一句话结论</text>
       <text class="result-summary-text">{{prepayResult.summaryText}}</text>
     </view>
+    <text class="field-hint" wx:if="{{prepayResult.scopeText}}">{{prepayResult.scopeText}}</text>
     <view class="result-actions" wx:if="{{prepayResult.valid}}">
       <button class="result-copy-btn" bindtap="copySummary">复制结果</button>
     </view>
@@ -906,7 +917,7 @@
       <view class="metric"><text>违约金</text><text>{{prepayResult.penalty}}</text></view>
       <view class="metric main"><text>{{prepayResult.netSavedLabel}}</text><text class="{{prepayResult.netSavedNegative ? 'negative' : ''}}">{{prepayResult.penaltyKnown ? prepayResult.netSaved : prepayResult.interestSaved}}</text></view>
       <view class="metric"><text>新剩余期数</text><text>{{prepayResult.newRemainingMonths}}期</text></view>
-      <view class="metric"><text>原月供</text><text>{{prepayResult.oldMonthlyPayment}}</text></view>
+      <view class="metric"><text>{{prepayResult.oldMonthlyPaymentLabel}}</text><text>{{prepayResult.oldMonthlyPayment}}</text></view>
       <view class="metric"><text>新月供</text><text>{{prepayResult.newMonthlyPayment}}</text></view>
     </view>
     </view>

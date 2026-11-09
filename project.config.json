@@ -50,6 +50,22 @@
       },
       {
         "type": "file",
+        "value": "pages/index/CLAUDE.local.md"
+      },
+      {
+        "type": "file",
+        "value": "tests/CLAUDE.local.md"
+      },
+      {
+        "type": "file",
+        "value": "utils/CLAUDE.local.md"
+      },
+      {
+        "type": "file",
+        "value": "AGENTS.md"
+      },
+      {
+        "type": "file",
         "value": "design-qa.md"
       },
       {
@@ -79,6 +95,10 @@
       {
         "type": "folder",
         "value": ".git"
+      },
+      {
+        "type": "folder",
+        "value": ".cursor"
       },
       {
         "type": "folder",

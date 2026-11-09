@@ -1,6 +1,6 @@
 {
   "name": "yunxin-loan-calculator-miniprogram",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "scripts": {
     "test": "node tests/loan.test.js && node tests/history.test.js && node tests/pdf.test.js && node tests/page.test.js"

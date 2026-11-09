@@ -168,6 +168,19 @@ assertScheduleBalances(loan.calcInterestOnly(120000, 12, 12))
 assertScheduleBalances(loan.calcBalloonLoan(200000, 14.4, 36, 80000))
 assertScheduleBalances(loan.calcCompositeLoan(1000000, 3.45, 500000, 2.85, 360, 'equalInstallment'))
 
+// 等额本息按分入账时，末期会吸收累计舍入；不能把正常小额长贷误判为计划失真。
+;(function () {
+  const smallLongTerm = loan.calcEqualInstallment(10000, 4.9, 360)
+  assert.strictEqual(loan.isReliableEqualInstallmentSchedule(smallLongTerm), true)
+
+  // 恰好能归还 1 分本金的计划不是“月供不足”的强制钳制，末期金额需保留给用户核对。
+  const oneCentPrincipal = loan.calcEqualInstallment(100000, 24, 600)
+  assert.strictEqual(loan.isReliableEqualInstallmentSchedule(oneCentPrincipal), true)
+
+  const forcedOneCentPrincipal = loan.calcEqualInstallment(100000, 30, 600)
+  assert.strictEqual(loan.isReliableEqualInstallmentSchedule(forcedOneCentPrincipal), false)
+})()
+
 // 通用现金流 IRR：尾款贷与先息后本均应往返回原利率
 ;(function () {
   const P = 200000, B = 80000, m = 36, r = 0.012
@@ -227,6 +240,96 @@ assertScheduleBalances(loan.calcCompositeLoan(1000000, 3.45, 500000, 2.85, 360, 
   const res = loan.calcPrepayment(1000000, 3.1, 360, 120, 100000, 'term', 0, 0, 'equalPrincipal', 700000)
   const expectedInterest = Math.round(700000 * (3.1 / 100 / 12) * 100) / 100
   closeTo(res.oldMonthlyPayment, base.schedule[120].principal + expectedInterest, 0.01)
+})()
+
+// 页面快速估算启用严格校验；旧接口默认行为保持兼容。
+;(function () {
+  const paidOff = loan.calcPrepayment(100000, 5, 12, 12, 10000, 'term', 0, 0, 'equalInstallment', 50000, { strict: true })
+  assert.strictEqual(paidOff.valid, false)
+  assert.strictEqual(paidOff.error, 'loanAlreadyPaidOff')
+
+  const exceedsBalance = loan.calcPrepayment(100000, 5, 12, 6, 90000, 'term', 0, 0, 'equalInstallment', undefined, { strict: true })
+  assert.strictEqual(exceedsBalance.valid, false)
+  assert.strictEqual(exceedsBalance.error, 'prepayExceedsBalance')
+
+  const balanceExceedsOriginalPrincipal = loan.calcPrepayment(100000, 5, 12, 6, 1000, 'term', 0, 0, 'equalInstallment', 100000.01, { strict: true })
+  assert.strictEqual(balanceExceedsOriginalPrincipal.valid, false)
+  assert.strictEqual(balanceExceedsOriginalPrincipal.error, 'remainingBalanceExceedsPrincipal')
+  // 缺省严格模式前的旧调用仍保持历史行为。
+  assert.strictEqual(loan.calcPrepayment(100000, 5, 12, 6, 1000, 'term', 0, 0, 'equalInstallment', 100000.01).valid, true)
+
+  // 账单余额与按当前利率从头推算值不一致时，应以账单余额、当前利率和剩余期数重建后续估算计划。
+  const repricedBalance = 952638.97
+  const remainingMonths = 324
+  const rebuiltInstallment = loan.calcEqualInstallment(repricedBalance, 3.1, remainingMonths)
+  const rebuiltPrincipal = loan.calcEqualPrincipal(repricedBalance, 3.1, remainingMonths)
+  ;['term', 'payment'].forEach(function (mode) {
+    const installment = loan.calcPrepayment(1000000, 3.1, 360, 36, 100000, mode, 0, 0, 'equalInstallment', repricedBalance, { strict: true })
+    assert.strictEqual(installment.valid, true)
+    assert.strictEqual(installment.rebuiltFromCurrentBalance, true)
+    closeTo(installment.oldMonthlyPayment, rebuiltInstallment.schedule[0].payment, 0.01)
+    assert.ok(installment.interestSaved > 0)
+
+    const principal = loan.calcPrepayment(1000000, 3.1, 360, 36, 100000, mode, 0, 0, 'equalPrincipal', repricedBalance, { strict: true })
+    assert.strictEqual(principal.valid, true)
+    assert.strictEqual(principal.rebuiltFromCurrentBalance, true)
+    closeTo(principal.oldMonthlyPayment, rebuiltPrincipal.schedule[0].payment, 0.01)
+    assert.ok(principal.interestSaved > 0)
+  })
+
+  const inferredBalance = loan.calcEqualInstallment(1000000, 3.1, 360).schedule[35].balance
+  ;[-1, 1].forEach(function (delta) {
+    const repriced = loan.calcPrepayment(1000000, 3.1, 360, 36, 100000, 'term', 0, 0, 'equalInstallment', inferredBalance + delta, { strict: true })
+    assert.strictEqual(repriced.valid, true)
+    assert.strictEqual(repriced.rebuiltFromCurrentBalance, true)
+  })
+  const matchingBalance = loan.calcPrepayment(1000000, 3.1, 360, 36, 100000, 'term', 0, 0, 'equalInstallment', inferredBalance, { strict: true })
+  assert.strictEqual(matchingBalance.valid, true)
+  assert.strictEqual(matchingBalance.rebuiltFromCurrentBalance, false)
+
+  const normalEqualPrincipal = loan.calcPrepayment(100000, 3.1, 12, 6, 1, 'payment', 0, 0, 'equalPrincipal', 50000, { strict: true })
+  assert.strictEqual(normalEqualPrincipal.valid, true)
+  assert.strictEqual(loan.calcPrepayment(100000, 3.1, 12, 6, 1, 'term', 0, 0, 'equalPrincipal', 50000, { strict: true }).valid, true)
+
+  // 原等额本金计划的分币本金序列必须从“已还期数后的下一期”继续，不能从第一期重放。
+  const unevenPrincipalBase = loan.calcEqualPrincipal(100001, 3.1, 12)
+  const unevenPrincipalBalance = unevenPrincipalBase.schedule[3].balance
+  ;[undefined, unevenPrincipalBalance].forEach(function (balance) {
+    const term = loan.calcPrepayment(100001, 3.1, 12, 4, 1, 'term', 0, 0, 'equalPrincipal', balance, { strict: true })
+    assert.strictEqual(term.valid, true)
+    closeTo(term.schedule[0].principal, unevenPrincipalBase.schedule[4].principal, 0.001)
+  })
+
+  const normalEqualInstallment = loan.calcPrepayment(10000, 3.1, 12, 1, 1, 'payment', 0, 0, 'equalInstallment', 9178.44, { strict: true })
+  assert.strictEqual(normalEqualInstallment.valid, true)
+  assert.strictEqual(loan.calcPrepayment(10000, 3.1, 12, 1, 1, 'term', 0, 0, 'equalInstallment', 9178.44, { strict: true }).valid, true)
+
+  const longEqualPrincipal = loan.calcPrepayment(100000, 3.1, 240, 1, 1, 'term', 0, 0, 'equalPrincipal', 99583.33, { strict: true })
+  assert.strictEqual(longEqualPrincipal.valid, true)
+
+  const longEqualInstallment = loan.calcPrepayment(1000000, 3.1, 360, 180, 1, 'term', 0, 0, 'equalInstallment', 614058.47, { strict: true })
+  assert.strictEqual(longEqualInstallment.valid, true)
+
+  const nearTermWithoutBalance = loan.calcPrepayment(100000, 0.1, 240, 224, 1, 'term', 0, 0, 'equalInstallment', undefined, { strict: true })
+  assert.strictEqual(nearTermWithoutBalance.valid, true)
+  const nearTermWithBalance = loan.calcPrepayment(100000, 0.1, 240, 224, 1, 'term', 0, 0, 'equalInstallment', 6730.13, { strict: true })
+  assert.strictEqual(nearTermWithBalance.valid, true)
+
+  // 高利率长周期对分币舍入敏感；严格路径应按同一逐期口径重算，而非误判为输入错误。
+  const extremeRatePrepay = loan.calcPrepayment(100000, 24, 600, 1, 1, 'term', 0, 0, 'equalInstallment', undefined, { strict: true })
+  assert.strictEqual(extremeRatePrepay.valid, true)
+  assert.strictEqual(extremeRatePrepay.newRemainingMonths, 562)
+  closeTo(extremeRatePrepay.interestSaved, 108832.61, 0.01)
+
+  const longHighRatePrepay = loan.calcPrepayment(100000, 15, 600, 1, 1, 'term', 0, 0, 'equalInstallment', undefined, { strict: true })
+  assert.strictEqual(longHighRatePrepay.valid, true)
+  assert.strictEqual(longHighRatePrepay.newRemainingMonths, 599)
+
+  // 账单余额与原计划不一致时，以账单余额重建后续估算计划，不沿用原计划的大额末期校正。
+  const mismatchedExtremeBalance = loan.calcPrepayment(100000, 24, 600, 1, 1, 'term', 0, 0, 'equalInstallment', 100000, { strict: true })
+  assert.strictEqual(mismatchedExtremeBalance.valid, true)
+  assert.strictEqual(mismatchedExtremeBalance.rebuiltFromCurrentBalance, true)
+
 })()
 
 // 正负数四舍五入必须对称，且不输出负零
@@ -488,6 +591,25 @@ assert.ok(!loan.formatMoney(1000000).includes(','))
   closeTo(lpr.initialAnnualRate, 3.3, 0.000001)
   closeTo(lpr.finalAnnualRate, 3, 0.000001)
   assertScheduleBalances(lpr)
+
+  const smallLongLpr = loan.calcRatePathSchedule({
+    principal: 10000,
+    months: 360,
+    method: 'equalInstallment',
+    lprPath: [{ effectiveMonth: 1, lpr: 4.9 }]
+  })
+  assert.strictEqual(loan.isReliableEqualInstallmentSchedule(smallLongLpr), true)
+
+  const forcedMinimumLpr = loan.calcRatePathSchedule({
+    principal: 100000,
+    months: 600,
+    method: 'equalInstallment',
+    ratePath: [
+      { effectiveMonth: 1, annualRate: 30 },
+      { effectiveMonth: 2, annualRate: 3.1 }
+    ]
+  })
+  assert.strictEqual(loan.isReliableEqualInstallmentSchedule(forcedMinimumLpr), false)
 
   const invalid = loan.calcRatePathSchedule({
     principal: 100000,

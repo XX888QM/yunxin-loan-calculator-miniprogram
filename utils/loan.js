@@ -119,6 +119,7 @@ function calcEqualInstallment(principal, annualRatePercent, months) {
   var paymentCents = toCents(theoreticalPayment)
   var balanceCents = principalCents
   var schedule = []
+  var hasForcedMinimumPrincipal = false
 
   for (var i = 1; i <= months; i += 1) {
     var interestCents = Math.round(balanceCents * r)
@@ -134,7 +135,10 @@ function calcEqualInstallment(principal, annualRatePercent, months) {
       rowPaymentCents = 0
     } else {
       principalPartCents = paymentCents - interestCents
-      if (principalPartCents <= 0) principalPartCents = Math.min(balanceCents, 1)
+      if (principalPartCents <= 0) {
+        hasForcedMinimumPrincipal = true
+        principalPartCents = Math.min(balanceCents, 1)
+      }
       principalPartCents = Math.min(balanceCents, principalPartCents)
       rowPaymentCents = principalPartCents + interestCents
     }
@@ -145,6 +149,7 @@ function calcEqualInstallment(principal, annualRatePercent, months) {
 
   var result = baseResult(principal, annualRatePercent, months, 'equalInstallment', schedule)
   result.monthlyPayment = theoreticalPayment
+  result.hasForcedMinimumPrincipal = hasForcedMinimumPrincipal
   return result
 }
 
@@ -521,12 +526,57 @@ function calcFixedPrincipalSchedule(balance, monthlyRate, principalPayment, maxM
   return schedule
 }
 
+function calcScheduledPrincipalSchedule(balance, monthlyRate, principalRows) {
+  var schedule = []
+  var currentCents = toCents(balance)
+  principalRows = principalRows || []
+
+  for (var i = 0; i < principalRows.length && currentCents > 0; i += 1) {
+    var principalCents = Math.min(currentCents, toCents(principalRows[i].principal))
+    var interestCents = Math.round(currentCents * monthlyRate)
+    currentCents = Math.max(0, currentCents - principalCents)
+    schedule.push(scheduleRow(i + 1, principalCents + interestCents, principalCents, interestCents, currentCents))
+  }
+
+  return schedule
+}
+
+function settleRoundingBalance(schedule, maxCents) {
+  if (!schedule.length) return schedule
+  var last = schedule[schedule.length - 1]
+  var balanceCents = toCents(last.balance)
+  if (balanceCents <= 0 || balanceCents > maxCents) return schedule
+  last.principal = moneyFromCents(toCents(last.principal) + balanceCents)
+  last.payment = moneyFromCents(toCents(last.payment) + balanceCents)
+  last.balance = 0
+  return schedule
+}
+
+function prepaymentRoundingTailLimit(base, remainingMonths, allowPlannedFinalAdjustment) {
+  var regularPaymentCents = toCents(base.monthlyPayment)
+  var plannedFinalExtraCents = allowPlannedFinalAdjustment
+    ? Math.max(0, toCents(base.lastPayment) - regularPaymentCents)
+    : 0
+  return Math.max(remainingMonths + 1, plannedFinalExtraCents)
+}
+
 function hasExplicitValue(value) {
   return value !== undefined && value !== null && String(value).trim() !== ''
 }
 
-function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode, penaltyPercent, penaltyAmount, method, currentBalance) {
+function reliableEqualInstallmentSchedule(result) {
+  var rows = result.schedule || []
+  if (!Number.isFinite(result.monthlyPayment) || !rows.length || result.hasForcedMinimumPrincipal) return false
+  for (var i = 0; i < rows.length - 1; i += 1) {
+    if (!Number.isFinite(rows[i].payment) || rows[i].balance <= 0 || rows[i].principal <= 0) return false
+  }
+  return true
+}
+
+function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepayAmount, reduceMode, penaltyPercent, penaltyAmount, method, currentBalance, options) {
   method = method === 'equalPrincipal' ? 'equalPrincipal' : 'equalInstallment'
+  options = options || {}
+  var strict = options.strict === true
   var base = calculateByMethod(principal, annualRatePercent, months, method)
   months = base.months
   paidMonths = Math.min(Math.max(0, Math.round(toNumber(paidMonths))), months)
@@ -534,6 +584,7 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
   var usedCurrentBalance = hasExplicitValue(currentBalance)
 
   if (paidMonths >= months) {
+    if (strict) return invalidCalculation('loanAlreadyPaidOff')
     return {
       valid: true,
       error: '',
@@ -559,15 +610,39 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
   var remainingBalance = usedCurrentBalance
     ? moneyFromCents(toCents(currentBalance))
     : (paidRow ? paidRow.balance : base.principal)
+  if (strict && usedCurrentBalance && toCents(remainingBalance) > toCents(base.principal)) {
+    return invalidCalculation('remainingBalanceExceedsPrincipal')
+  }
+  if (strict && toCents(prepayAmount) > toCents(remainingBalance)) return invalidCalculation('prepayExceedsBalance')
+  var scheduledBalance = paidRow ? paidRow.balance : base.principal
+  var balanceMatchesSchedule = strict && usedCurrentBalance && toCents(remainingBalance) === toCents(scheduledBalance)
+  var rebuiltFromCurrentBalance = strict && usedCurrentBalance && !balanceMatchesSchedule
+  var plan = rebuiltFromCurrentBalance
+    ? calculateByMethod(remainingBalance, annualRatePercent, remainingMonths, method)
+    : base
+  if (strict && method === 'equalInstallment' && !reliableEqualInstallmentSchedule(plan)) {
+    return invalidCalculation('unreliableSchedule')
+  }
+  var allowPlannedFinalAdjustment = !usedCurrentBalance || balanceMatchesSchedule || rebuiltFromCurrentBalance
   var nextBaseRow = base.schedule[paidMonths] || base.schedule[base.schedule.length - 1]
   var oldSchedule
-  if (usedCurrentBalance && method === 'equalPrincipal') {
-    oldSchedule = calcFixedPrincipalSchedule(remainingBalance, base.monthlyRate, nextBaseRow.principal, remainingMonths)
+  if (balanceMatchesSchedule) {
+    oldSchedule = base.schedule.slice(paidMonths)
+  } else if (rebuiltFromCurrentBalance) {
+    oldSchedule = plan.schedule
+  } else if (usedCurrentBalance && method === 'equalPrincipal') {
+    oldSchedule = strict
+      ? calcScheduledPrincipalSchedule(remainingBalance, base.monthlyRate, base.schedule.slice(paidMonths))
+      : calcFixedPrincipalSchedule(remainingBalance, base.monthlyRate, nextBaseRow.principal, remainingMonths)
   } else if (usedCurrentBalance) {
-    oldSchedule = calcFixedPaymentSchedule(remainingBalance, base.monthlyRate, base.monthlyPayment, remainingMonths)
+    oldSchedule = calcFixedPaymentSchedule(remainingBalance, base.monthlyRate, base.monthlyPayment, remainingMonths, {
+      forceFinalBalance: !strict
+    })
   } else {
     oldSchedule = base.schedule.slice(paidMonths)
   }
+  if (strict) settleRoundingBalance(oldSchedule, prepaymentRoundingTailLimit(plan, remainingMonths, allowPlannedFinalAdjustment))
+  if (strict && !scheduleIsPaidOff(oldSchedule)) return invalidCalculation('paymentInsufficient')
   var afterPrepayBalance = moneyFromCents(Math.max(0, toCents(remainingBalance) - toCents(prepayAmount)))
   var effectivePrepayCents = Math.min(toCents(prepayAmount), toCents(remainingBalance))
   var penaltyCents = nonNegative(penaltyAmount) > 0
@@ -585,12 +660,24 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
       var nextPrincipal = base.schedule[paidMonths]
         ? base.schedule[paidMonths].principal
         : base.schedule[base.schedule.length - 1].principal
-      newSchedule = calcFixedPrincipalSchedule(afterPrepayBalance, base.monthlyRate, nextPrincipal, remainingMonths)
+      var planPrincipalRows = rebuiltFromCurrentBalance
+        ? plan.schedule
+        : base.schedule.slice(paidMonths)
+      newSchedule = strict
+        ? calcScheduledPrincipalSchedule(afterPrepayBalance, plan.monthlyRate, planPrincipalRows)
+        : calcFixedPrincipalSchedule(afterPrepayBalance, base.monthlyRate, nextPrincipal, remainingMonths)
     }
   } else if (reduceMode === 'payment') {
     newSchedule = calcEqualInstallment(afterPrepayBalance, annualRatePercent, remainingMonths).schedule
   } else {
-    newSchedule = calcFixedPaymentSchedule(afterPrepayBalance, base.monthlyRate, base.monthlyPayment, remainingMonths)
+    newSchedule = calcFixedPaymentSchedule(afterPrepayBalance, plan.monthlyRate, plan.monthlyPayment, remainingMonths, {
+      forceFinalBalance: !strict
+    })
+  }
+  // 原计划余额可信时，延续其末期分币校正；自填不一致余额只能吸收新表自身的小尾差。
+  if (strict) settleRoundingBalance(newSchedule, prepaymentRoundingTailLimit(plan, remainingMonths, allowPlannedFinalAdjustment))
+  if (strict && toCents(afterPrepayBalance) > 0 && !scheduleIsPaidOff(newSchedule)) {
+    return invalidCalculation('paymentInsufficient')
   }
 
   var newRemainingInterestCents = sumScheduleCents(newSchedule, 'interest')
@@ -602,6 +689,7 @@ function calcPrepayment(principal, annualRatePercent, months, paidMonths, prepay
     error: '',
     method: method,
     usedCurrentBalance: usedCurrentBalance,
+    rebuiltFromCurrentBalance: rebuiltFromCurrentBalance,
     remainingBalance: moneyFromCents(toCents(remainingBalance)),
     afterPrepayBalance: afterPrepayBalance,
     oldRemainingInterest: moneyFromCents(oldRemainingInterestCents),
@@ -979,6 +1067,7 @@ function calcRatePathSchedule(options) {
   var paymentChanges = []
   var paymentCents = 0
   var repaidPrincipalCents = 0
+  var hasForcedMinimumPrincipal = false
 
   for (var month = 1; month <= months; month += 1) {
     var rate = ratePathAtMonth(path, month)
@@ -1009,7 +1098,10 @@ function calcRatePathSchedule(options) {
         rowPaymentCents = principalPartCents + interestCents
       } else {
         principalPartCents = paymentCents - interestCents
-        if (principalPartCents <= 0) principalPartCents = Math.min(balanceCents, 1)
+        if (principalPartCents <= 0) {
+          hasForcedMinimumPrincipal = true
+          principalPartCents = Math.min(balanceCents, 1)
+        }
         principalPartCents = Math.min(balanceCents, principalPartCents)
         rowPaymentCents = principalPartCents + interestCents
       }
@@ -1037,6 +1129,7 @@ function calcRatePathSchedule(options) {
   result.isRateScenario = true
   result.repricingUnit = 'month'
   result.paymentChanges = paymentChanges
+  result.hasForcedMinimumPrincipal = hasForcedMinimumPrincipal
   return result
 }
 
@@ -1296,6 +1389,7 @@ module.exports = {
   normalizeMonths: normalizeMonths,
   calculateByMethod: calculateByMethod,
   calcEqualInstallment: calcEqualInstallment,
+  isReliableEqualInstallmentSchedule: reliableEqualInstallmentSchedule,
   calcEqualPrincipal: calcEqualPrincipal,
   calcInterestOnly: calcInterestOnly,
   calcActualRate: calcActualRate,

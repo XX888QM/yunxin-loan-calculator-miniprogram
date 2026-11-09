@@ -34,6 +34,19 @@ function schedulePreview(schedule, startYm) {
   })
 }
 
+function exportedPdfFiles(files) {
+  return (files || []).filter(function (file) {
+    return /^loan-(?:quote|schedule)-\d+\.pdf$/.test(file)
+  })
+}
+
+function hasRecoverableQuoteHistory() {
+  const result = history.inspect()
+  return ['invalidData', 'incompatibleData', 'incompatibleItem'].indexOf(result.error) >= 0
+}
+
+const SCHEDULE_PRECISION_ERROR = '当前金额、利率和期数组合无法可靠生成还款计划，请核对输入'
+
 function methodName(method) {
   if (method === 'equalPrincipal') return '等额本金'
   if (method === 'interestOnly') return '先息后本'
@@ -184,6 +197,7 @@ function engineErrorText(error) {
   if (error === 'invalidRatePath') return 'LPR 情景参数不完整或顺序不正确'
   if (error === 'invalidSpreadBps') return 'LPR 加点数不正确'
   if (error === 'invalidRemainingPrincipal') return '当前剩余本金必须大于0'
+  if (error === 'remainingBalanceExceedsPrincipal') return '当前剩余本金不能超过原贷款本金'
   if (error === 'invalidRemainingMonths') return '剩余期数不正确'
   if (error === 'invalidPrepayPrincipal') return '提前归还本金必须大于0'
   if (error === 'prepayExceedsBalance') return '提前归还本金不能超过剩余本金'
@@ -194,7 +208,9 @@ function engineErrorText(error) {
   if (error === 'unsupportedLoanState') return '有逾期、欠款或跳期时，请以最新账单为准'
   if (error === 'unsupportedRatePath') return '浮动利率贷款请以最新还款计划为准，暂不能做账单/按日测算'
   if (error === 'unsupportedMethod') return '该还款结构暂不支持这项账单/按日测算'
+  if (error === 'unreliableSchedule') return SCHEDULE_PRECISION_ERROR
   if (error === 'paymentInsufficient') return '当前月供不足以在剩余期数内还清，请核对账单'
+  if (error === 'loanAlreadyPaidOff') return '贷款已按填写期数还清，无需提前还款'
   if (error === 'paymentTermMismatch') return '按当前自定义还款额会提前结清，与剩余期数不一致'
   if (error === 'unsupportedCustomPayment') return '当前还款方式不支持这类自定义还款额'
   return '当前输入无法完成计算'
@@ -414,6 +430,7 @@ Page({
     quoteError: '',
     quoteErrorStep: 0,
     quoteHistory: [],
+    quoteHistoryRecovery: false,
     quoteComparisons: [],
     loanTypeList: LOAN_TYPES,
     loanType: 'car',
@@ -555,7 +572,7 @@ Page({
     const appVersion = app && app.globalData && app.globalData.version
     if (appVersion) this.setData({ appVersion })
     this.enableShareMenus()
-    this.setData({ quoteHistory: this.loadQuoteHistory() })
+    this.setData(this.quoteHistoryData())
     this.recalculate()
   },
 
@@ -593,6 +610,13 @@ Page({
 
   loadQuoteHistory() {
     return this.quoteHistoryRows(history.load())
+  },
+
+  quoteHistoryData() {
+    return {
+      quoteHistory: this.loadQuoteHistory(),
+      quoteHistoryRecovery: hasRecoverableQuoteHistory()
+    }
   },
 
   scrollToTop() {
@@ -666,7 +690,8 @@ Page({
   openHistory() {
     this.setData({
       screenMode: 'history',
-      quoteHistory: this.loadQuoteHistory()
+      quoteHistory: this.loadQuoteHistory(),
+      quoteHistoryRecovery: hasRecoverableQuoteHistory()
     }, () => this.scrollToTop())
   },
 
@@ -887,14 +912,16 @@ Page({
 
   removeQuoteHistory(event) {
     const id = event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.id
-    const before = this.loadQuoteHistory()
-    const items = history.remove(id)
-    const rows = this.quoteHistoryRows(items)
-    this.setData({ quoteHistory: rows })
-    if (rows.length >= before.length) {
-      wx.showToast({ title: '删除失败，请重试', icon: 'none' })
+    const removed = history.removeResult(id)
+    if (!removed.ok) {
+      const protectedData = ['readFailed', 'invalidData', 'incompatibleData', 'incompatibleItem'].indexOf(removed.error) >= 0
+      wx.showToast({
+        title: protectedData ? '本机历史数据异常，已阻止覆盖' : '删除失败，请重试',
+        icon: 'none'
+      })
       return
     }
+    this.setData({ quoteHistory: this.quoteHistoryRows(removed.items) })
     wx.showToast({ title: '已删除', icon: 'success' })
   },
 
@@ -921,12 +948,12 @@ Page({
       wx.showToast({ title: '暂无可清空记录', icon: 'none' })
       return
     }
-    history.clear()
-    const rows = this.loadQuoteHistory()
-    this.setData({ quoteHistory: rows })
+    const cleared = history.clearResult()
+    const data = this.quoteHistoryData()
+    this.setData(data)
     wx.showToast({
-      title: rows.length ? '清空失败，请重试' : '已清空',
-      icon: rows.length ? 'none' : 'success'
+      title: cleared.ok && !data.quoteHistory.length ? '已清空' : '清空失败，请重试',
+      icon: cleared.ok && !data.quoteHistory.length ? 'success' : 'none'
     })
   },
 
@@ -943,6 +970,37 @@ Page({
       confirmColor: '#c43d2f',
       success(res) {
         if (res.confirm) self.clearQuoteHistory()
+      }
+    })
+  },
+
+  recoverQuoteHistory() {
+    if (!hasRecoverableQuoteHistory()) {
+      wx.showToast({ title: '未发现可清空的异常历史', icon: 'none' })
+      return
+    }
+    const cleared = history.clearResult()
+    const data = this.quoteHistoryData()
+    this.setData(data)
+    wx.showToast({
+      title: cleared.ok && !data.quoteHistoryRecovery ? '异常历史已清空' : '清空失败，请重试',
+      icon: cleared.ok && !data.quoteHistoryRecovery ? 'success' : 'none'
+    })
+  },
+
+  confirmRecoverQuoteHistory() {
+    const self = this
+    if (!wx.showModal) {
+      this.recoverQuoteHistory()
+      return
+    }
+    wx.showModal({
+      title: '清空异常历史？',
+      content: '将删除全部本机历史（包括可能正常的记录），清空后无法恢复。',
+      confirmText: '清空',
+      confirmColor: '#c43d2f',
+      success(res) {
+        if (res.confirm) self.recoverQuoteHistory()
       }
     })
   },
@@ -985,7 +1043,8 @@ Page({
     }
     const data = pdf.createQuoteReportPdf(this.buildQuoteReportDocument())
     const filePath = wx.env.USER_DATA_PATH + '/loan-quote-' + Date.now() + '.pdf'
-    wx.getFileSystemManager().writeFile({
+    const fileSystem = wx.getFileSystemManager()
+    fileSystem.writeFile({
       filePath,
       data,
       success: function () {
@@ -993,10 +1052,59 @@ Page({
           filePath,
           fileType: 'pdf',
           showMenu: true,
-          fail: function () { wx.showToast({ title: '打开PDF失败', icon: 'none' }) }
+          fail: function () {
+            if (typeof fileSystem.unlink === 'function') fileSystem.unlink({ filePath: filePath, fail: function () {} })
+            wx.showToast({ title: '打开PDF失败', icon: 'none' })
+          }
         })
       },
       fail: function () { wx.showToast({ title: '导出失败', icon: 'none' }) }
+    })
+  },
+
+  confirmClearExportedPdfs() {
+    const directory = wx.env && wx.env.USER_DATA_PATH
+    const fileSystem = typeof wx.getFileSystemManager === 'function' && wx.getFileSystemManager()
+    if (!directory || !fileSystem || typeof fileSystem.readdir !== 'function' || typeof fileSystem.unlink !== 'function') {
+      wx.showToast({ title: '无法读取本机导出文件', icon: 'none' })
+      return
+    }
+    fileSystem.readdir({
+      dirPath: directory,
+      success: function (result) {
+        const files = exportedPdfFiles(result.files)
+        if (!files.length) {
+          wx.showToast({ title: '没有可清理的导出PDF', icon: 'none' })
+          return
+        }
+        wx.showModal({
+          title: '清理已导出PDF',
+          content: '将删除 ' + files.length + ' 份本机导出文件。请先完成分享或保存，删除后无法恢复。',
+          confirmText: '清理',
+          success: function (modal) {
+            if (!modal.confirm) return
+            let finished = 0
+            let failed = 0
+            files.forEach(function (file) {
+              fileSystem.unlink({
+                filePath: directory + '/' + file,
+                success: function () { finish(true) },
+                fail: function () { finish(false) }
+              })
+            })
+            function finish(ok) {
+              finished += 1
+              if (!ok) failed += 1
+              if (finished !== files.length) return
+              wx.showToast({
+                title: failed ? '已清理 ' + (files.length - failed) + ' 份，' + failed + ' 份未清理' : '已清理 ' + files.length + ' 份导出PDF',
+                icon: 'none'
+              })
+            }
+          }
+        })
+      },
+      fail: function () { wx.showToast({ title: '读取导出文件失败', icon: 'none' }) }
     })
   },
 
@@ -1007,7 +1115,7 @@ Page({
       return
     }
     const id = 'q' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 0xFFFFFF).toString(36)
-    const items = history.save({
+    const saved = history.saveResult({
       id,
       loanType: result.purpose,
       tool: 'quote',
@@ -1020,8 +1128,16 @@ Page({
         totalFinancingCost: result.raw.totalFinancingCost
       }
     })
-    this.setData({ quoteHistory: this.quoteHistoryRows(items) })
-    if (!items.some(function (item) { return item.id === id })) {
+    if (!saved.ok) {
+      const protectedData = ['readFailed', 'invalidData', 'incompatibleData', 'incompatibleItem'].indexOf(saved.error) >= 0
+      wx.showToast({
+        title: protectedData ? '本机历史数据异常，已阻止覆盖' : '保存失败，请检查本机存储空间',
+        icon: 'none'
+      })
+      return
+    }
+    this.setData({ quoteHistory: this.quoteHistoryRows(saved.items) })
+    if (!saved.items.some(function (item) { return item.id === id })) {
       wx.showToast({ title: '保存失败，请检查本机存储空间', icon: 'none' })
       return
     }
@@ -1172,7 +1288,8 @@ Page({
       total: rows.length
     })
     const filePath = wx.env.USER_DATA_PATH + '/loan-schedule-' + Date.now() + '.pdf'
-    wx.getFileSystemManager().writeFile({
+    const fileSystem = wx.getFileSystemManager()
+    fileSystem.writeFile({
       filePath,
       data,
       success: function () {
@@ -1181,6 +1298,7 @@ Page({
           fileType: 'pdf',
           showMenu: true,
           fail: function () {
+            if (typeof fileSystem.unlink === 'function') fileSystem.unlink({ filePath: filePath, fail: function () {} })
             wx.showToast({ title: '打开PDF失败', icon: 'none' })
           }
         })
@@ -1298,7 +1416,12 @@ Page({
     if (form.structure === 'interestOnly') cashflows[term.value - 1] += principal
 
     const actual = loan.calcActualRate(principal, monthly.value, term.value, 0, upfrontFee, { cashflows })
-    if (!actual.valid) return invalid(engineErrorText(actual.error))
+    if (!actual.valid) {
+      if (actual.error === 'insufficientCashflow' && upfrontFee > 0 && actual.feeAdjustedMonthlyRate > 0) {
+        return invalid('暂不支持此类现金流，请核对本金、还款和费用')
+      }
+      return invalid(engineErrorText(actual.error))
+    }
 
     const contractRepayment = monthly.value * term.value +
       (form.structure === 'balloon' ? balloonAmount : (form.structure === 'interestOnly' ? principal : 0))
@@ -1443,6 +1566,9 @@ Page({
 
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
     const result = loan.calculateByMethod(principal, annualRate, term.value, form.method)
+    if (form.method === 'equalInstallment' && !loan.isReliableEqualInstallmentSchedule(result)) {
+      return invalid(SCHEDULE_PRECISION_ERROR)
+    }
     const primaryPayment = form.method === 'equalPrincipal' ? result.firstPayment : result.monthlyPayment
     const priceLines = form.inputMode === 'price'
       ? [`${this.data.loanType === 'car' ? '车价' : '房价'}：${money(carPrice)} 元`, `首付：${money(downPayment)} 元`]
@@ -1511,6 +1637,10 @@ Page({
     const months = years.value * 12
     const commercialRate = asAnnualRate(form.commercialRate, form.rateMode)
     const fundRate = asAnnualRate(form.fundRate, form.rateMode)
+    if (form.method === 'equalInstallment' && (
+      (commercialPrincipal > 0 && !loan.isReliableEqualInstallmentSchedule(loan.calcEqualInstallment(commercialPrincipal, commercialRate, months))) ||
+      (fundPrincipal > 0 && !loan.isReliableEqualInstallmentSchedule(loan.calcEqualInstallment(fundPrincipal, fundRate, months)))
+    )) return invalid(SCHEDULE_PRECISION_ERROR)
     const result = loan.calcCompositeLoan(
       commercialPrincipal,
       commercialRate,
@@ -1569,6 +1699,7 @@ Page({
 
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
     const result = loan.calcAffordableLoan(budget.value, annualRate, term.value, form.method)
+    if (form.method === 'equalInstallment' && !loan.isReliableEqualInstallmentSchedule(result)) return invalid(SCHEDULE_PRECISION_ERROR)
     const primaryPayment = form.method === 'equalPrincipal' ? result.firstPayment : result.monthlyPayment
     const copyText = context.concat([
       `${primaryLabel}预算：${money(budget.value)} 元`,
@@ -1822,6 +1953,7 @@ Page({
     const annualRate = asAnnualRate(form.annualRate, form.rateMode)
     const result = loan.calcBalloonLoan(principal, annualRate, term.value, balloonAmount)
     const normal = loan.calcEqualInstallment(principal, annualRate, term.value)
+    if (!Number.isFinite(result.monthlyPayment) || !loan.isReliableEqualInstallmentSchedule(normal)) return invalid(SCHEDULE_PRECISION_ERROR)
     const copyText = context.concat([
       `贷款本金：${money(result.principal)} 元`,
       `尾款：${money(result.balloonAmount)} 元`,
@@ -1981,6 +2113,8 @@ Page({
     })
     if (!result.valid) return invalid(engineErrorText(result.error))
 
+    if (form.method === 'equalInstallment' && !loan.isReliableEqualInstallmentSchedule(result)) return invalid(SCHEDULE_PRECISION_ERROR)
+
     const firstPayment = result.schedule[0].payment
     const repricePayment = result.schedule[reprice.value - 1].payment
     const paymentChange = repricePayment - result.schedule[reprice.value - 2].payment
@@ -2063,6 +2197,10 @@ Page({
         ? amount(penalty.empty ? 0 : form.penaltyValue, form.unit)
         : (penalty.empty ? 0 : penalty.value)
     }
+
+    if (form.method === 'equalInstallment' && !loan.isReliableEqualInstallmentSchedule(
+      loan.calcEqualInstallment(options.remainingPrincipal, options.annualRate, options.remainingMonths)
+    )) return invalid(SCHEDULE_PRECISION_ERROR)
 
     if (form.settlementMode === 'statement') {
       const settlementInterest = parseNumberField(form.settlementInterest, '账单应计利息', { min: 0 })
@@ -2148,8 +2286,10 @@ Page({
       netSavedNegative: false,
       oldRemainingMonths: '—',
       newRemainingMonths: '—',
+      oldMonthlyPaymentLabel: '原月供',
       oldMonthlyPayment: '—',
       newMonthlyPayment: '—',
+      scopeText: '',
       schedulePreview: [],
       copyText: invalidCopy(context, error)
     })
@@ -2189,10 +2329,17 @@ Page({
       form.penaltyMode === 'percent' ? loan.toNumber(form.penaltyPercent) : 0,
       form.penaltyMode === 'amount' ? amount(form.penaltyAmount, form.unit) : 0,
       form.method,
-      currentBalance
+      currentBalance,
+      { strict: true }
     )
+    if (!result.valid) return invalid(engineErrorText(result.error))
+    const rebuiltFromCurrentBalance = result.rebuiltFromCurrentBalance === true
+    const scopeText = rebuiltFromCurrentBalance
+      ? '已按填写的当前余额、当前利率和剩余期数重建后续估算计划；实际月供、利息以最新还款计划和结清试算单为准。'
+      : ''
     const copyText = context.concat([
       `原还款方式：${methodName(form.method)}`,
+      rebuiltFromCurrentBalance ? '后续计划口径：按账单余额重建后续计划估算' : '',
       `剩余本金：${money(result.remainingBalance)} 元`,
       `提前还款后本金：${money(result.afterPrepayBalance)} 元`,
       `节省利息：${money(result.interestSaved)} 元`,
@@ -2203,7 +2350,7 @@ Page({
       `原剩余期数：${result.oldRemainingMonths} 期`,
       `新剩余期数：${result.newRemainingMonths} 期`,
       `新月供：${money(result.newMonthlyPayment)} 元`
-    ]).join('\n')
+    ].filter(Boolean)).join('\n')
 
     const prepaySummary = !penaltyKnown
       ? '预计节省利息约 ' + money(result.interestSaved) + ' 元；违约金未核对'
@@ -2227,8 +2374,11 @@ Page({
       netSavedNegative: result.netSaved < 0,
       oldRemainingMonths: result.oldRemainingMonths,
       newRemainingMonths: result.newRemainingMonths,
+      rebuiltFromCurrentBalance,
+      oldMonthlyPaymentLabel: rebuiltFromCurrentBalance ? '按当前余额估算月供' : '原月供',
       oldMonthlyPayment: money(result.oldMonthlyPayment),
       newMonthlyPayment: money(result.newMonthlyPayment),
+      scopeText,
       schedulePreview: schedulePreview(result.schedule, this.data.scheduleStartYm),
       copyText
     }
